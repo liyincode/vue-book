@@ -1,6 +1,7 @@
 let activeEffect
 function effect(fn) {
     const effectFn = () => {
+        // 每次副作用函数执行前，先把它从所有与之关联的依赖集合中删除
         cleanup(effectFn)
         // 将副作用函数复制给 activeEffect
         activeEffect = effectFn
@@ -61,9 +62,11 @@ function trigger(target, key) {
     if (!depsMap) return
     const effects = depsMap.get(key)
 
+    // 避免无限循环
     const effectsToRun = new Set(effects)
     effectsToRun.forEach(effectFn => effectFn())
-    effects && effects.forEach(fn => fn())
+    // 这里会导致无限循环执行，原因是执行副作用函数时边 cleanup 清除，执行副作用函数导致重新依赖收集到里面了
+    // effects && effects.forEach(fn => fn())
 }
 
 effect(function effectFn() {
@@ -71,7 +74,7 @@ effect(function effectFn() {
     console.log(test)
 })
 
-obj.ok = false
+// obj.ok = false
 
 // 按照正常逻辑来说，以下代码不会触发副作用函数更新
-obj.text = 'hello vue3'
+// obj.text = 'hello vue3'
