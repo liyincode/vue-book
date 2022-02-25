@@ -1,6 +1,6 @@
 const bucket = new WeakMap();
 
-const data = { foo: 1, bar: 1 }
+const data = { foo: 1, bar: 2 }
 
 const obj = new Proxy(data, {
   get(target, key, receiver) {
@@ -105,13 +105,21 @@ function cleanup(effectFn) {
 // const value = effectFn()
 
 function computed(getter) {
+  let value
+  let dirty = true
+
   const effectFn = effect(getter, {
     lazy: true
   })
 
   const obj = {
     get value() {
-      return effectFn()
+      console.log('get value', dirty)
+      if (dirty) {
+        value = effectFn()
+        dirty = false
+      }
+      return value
     }
   }
 
@@ -120,13 +128,17 @@ function computed(getter) {
 
 
 const sumRes = computed(() => obj.foo + obj.bar)
+
+// 3
 console.log(sumRes.value)
-console.log(sumRes.value)
+obj.foo++
+// 再次访问，得到的结果还是 3
+// 是因为上面第一次访问时，把 dirty = false，所以一直返回的缓存的 value
 console.log(sumRes.value)
 
 
 
-console.log('结束了')
+
 
 // effect(() => {
 //   console.log(99)
