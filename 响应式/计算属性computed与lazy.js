@@ -109,12 +109,15 @@ function computed(getter) {
   let dirty = true
 
   const effectFn = effect(getter, {
-    lazy: true
+    lazy: true,
+    scheduler() {
+      // 当 obj.foo 或 obj.bar 的值变化时，dirty 重置为 true
+      dirty = true
+    }
   })
 
   const obj = {
     get value() {
-      console.log('get value', dirty)
       if (dirty) {
         value = effectFn()
         dirty = false
