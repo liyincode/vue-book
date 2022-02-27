@@ -86,9 +86,15 @@ function cleanup(effectFn) {
 }
 
 function watch(source, cb) {
+    let getter
+    if (typeof source === 'function') {
+        getter = source
+    } else {
+        getter = () => traverse(source)
+    }
     effect(
         // 递归读取属性
-        () => traverse(source),
+        () => getter(),
         {
             scheduler() {
                 cb()
@@ -110,9 +116,11 @@ function traverse(value, seen = new Set()) {
     return value
 }
 
-watch(obj, () => {
-    console.log('数据变化了')
+watch(
+    () => obj.foo,
+    () => {
+        console.log('数据变化了')
 })
 
-obj.bar++
+// obj.bar++
 obj.foo++
