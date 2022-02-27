@@ -87,8 +87,8 @@ function cleanup(effectFn) {
 
 function watch(source, cb) {
     effect(
-        // 触发读取操作，从而建立联系
-        () => source.foo,
+        // 递归读取属性
+        () => traverse(source),
         {
             scheduler() {
                 cb()
@@ -97,8 +97,22 @@ function watch(source, cb) {
     )
 }
 
+function traverse(value, seen = new Set()) {
+    // 递归终止条件
+    if (typeof value !== 'object' || value === null | seen.has(value)) return
+    // 将数据添加到 seen 中，代表数据已经被读取过了
+    seen.add(value)
+    // 假设 value 就是一个对象，暂时不考虑 数组
+    for (const k in value) {
+        traverse(value[k], seen)
+    }
+
+    return value
+}
+
 watch(obj, () => {
     console.log('数据变化了')
 })
 
+obj.bar++
 obj.foo++
