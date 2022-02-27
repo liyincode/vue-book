@@ -106,7 +106,12 @@ function watch(source, cb, options) {
         {
             lazy: true,
             scheduler() {
-                job()
+                if (options.flush === 'post') {
+                    const p = Promise.resolve()
+                    p.then(job)
+                } else {
+                    job()
+                }
             }
         }
     )
@@ -137,8 +142,8 @@ watch(
         console.log('数据变化了', newValue, oldValue)
     },
     {
-        // 回调函数会在 watch 创建时立即执行一次
-        immediate: true
+        // 如果想要在 dom 更新之后执行
+        flush: 'post'
     }
     )
 
