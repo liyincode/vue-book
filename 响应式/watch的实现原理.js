@@ -92,15 +92,22 @@ function watch(source, cb) {
     } else {
         getter = () => traverse(source)
     }
-    effect(
+    // 定义旧值和新值
+    let oldValue, newValue
+    const effectFn = effect(
         // 递归读取属性
         () => getter(),
         {
+            lazy: true,
             scheduler() {
-                cb()
+                newValue = effectFn()
+                cb(newValue, oldValue)
+                oldValue = newValue
             }
         }
     )
+
+    oldValue = effectFn()
 }
 
 function traverse(value, seen = new Set()) {
@@ -118,9 +125,11 @@ function traverse(value, seen = new Set()) {
 
 watch(
     () => obj.foo,
-    () => {
-        console.log('数据变化了')
+    (newValue, oldValue) => {
+        console.log('数据变化了', newValue, oldValue)
 })
 
 // obj.bar++
+obj.foo++
+obj.foo++
 obj.foo++
