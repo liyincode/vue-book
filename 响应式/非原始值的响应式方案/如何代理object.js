@@ -12,8 +12,10 @@ const p = new Proxy(obj, {
     },
 
     set(target, key, value, receiver) {
+        // 判断这个属性是不是已经在这个对象了
+        const type = Object.prototype.hasOwnProperty.call(target, key) ? 'SET' : 'ADD'
         const res = Reflect.set(target, key, value, receiver)
-        trigger(target, key)
+        trigger(target, key, type)
         return res
     },
 
@@ -46,13 +48,12 @@ function track(target, key) {
     activeEffect.deps.push(deps)
 }
 
-function trigger(target, key) {
+function trigger(target, key, type) {
     const depsMap = bucket.get(target)
     if (!depsMap) return
 
     const effects = depsMap.get(key)
-    // 取得 ITERATE_KEY 相关联的副作用函数
-    const iterateEffects = depsMap.get(ITERATE_KEY)
+
 
     const effectsToRun = new Set()
     effects && effects.forEach(effectFn => {
@@ -62,14 +63,19 @@ function trigger(target, key) {
         }
     })
 
-    // ITERATE_KEY 相关联的函数也添加到 effectsToRun 中
+    // 只有当操作类型为 'ADD' 时，才会触发 ITERATE_KEY 相关联的副作用函数的更新
+    if (type === 'ADD') {
+        // 取得 ITERATE_KEY 相关联的副作用函数
+        const iterateEffects = depsMap.get(ITERATE_KEY)
 
-    iterateEffects && iterateEffects.forEach(effectFn => {
-        // 如果 trigger 触发执行的副作用函数与当前正在执行的函数相同，则不触发执行
-        if (effectFn !== activeEffect) {
-            effectsToRun.add(effectFn)
-        }
-    })
+        // ITERATE_KEY 相关联的函数也添加到 effectsToRun 中
+        iterateEffects && iterateEffects.forEach(effectFn => {
+            // 如果 trigger 触发执行的副作用函数与当前正在执行的函数相同，则不触发执行
+            if (effectFn !== activeEffect) {
+                effectsToRun.add(effectFn)
+            }
+        })
+    }
 
     effectsToRun.forEach(effectFn => {
         // 如果副作用函数有调用器，就使用调用器来执行副作用函数
@@ -127,3 +133,7 @@ effect(() => {
 // 因为是 ITERATE_KEY 与 副作用函数建立的联系，foo 与 副作用函数并没有建立联系
 // 所以这里不会触发副作用函数
 p.foo++
+
+// 修改操作不会对 for...in... 副作用函数产生影响，因为数据还就这么几个，又没变，遍历结果是一样的
+// 但添加不一样，添加了一个属性，所以需要再 触发 for...in...一次，修改就没必要触发了
+p.bar = 2
