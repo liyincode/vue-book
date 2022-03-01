@@ -12,8 +12,9 @@ const p = new Proxy(obj, {
     },
 
     set(target, key, value, receiver) {
-        target[key] = value
+        const res = Reflect.set(target, key, value, receiver)
         trigger(target, key)
+        return res
     },
 
     // 如果 in 操作符读取，使用 has 拦截函数依赖收集建立联系
@@ -50,6 +51,8 @@ function trigger(target, key) {
     if (!depsMap) return
 
     const effects = depsMap.get(key)
+    // 取得 ITERATE_KEY 相关联的副作用函数
+    const iterateEffects = depsMap.get(ITERATE_KEY)
 
     const effectsToRun = new Set()
     effects && effects.forEach(effectFn => {
@@ -58,6 +61,16 @@ function trigger(target, key) {
             effectsToRun.add(effectFn)
         }
     })
+
+    // ITERATE_KEY 相关联的函数也添加到 effectsToRun 中
+
+    iterateEffects && iterateEffects.forEach(effectFn => {
+        // 如果 trigger 触发执行的副作用函数与当前正在执行的函数相同，则不触发执行
+        if (effectFn !== activeEffect) {
+            effectsToRun.add(effectFn)
+        }
+    })
+
     effectsToRun.forEach(effectFn => {
         // 如果副作用函数有调用器，就使用调用器来执行副作用函数
         if (effectFn.options.scheduler) {
@@ -110,3 +123,7 @@ effect(() => {
     }
 })
 
+// 当我们**修改** foo 的值时，不会触发副作用函数
+// 因为是 ITERATE_KEY 与 副作用函数建立的联系，foo 与 副作用函数并没有建立联系
+// 所以这里不会触发副作用函数
+p.foo++
