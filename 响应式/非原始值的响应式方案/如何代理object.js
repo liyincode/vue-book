@@ -1,5 +1,6 @@
 const obj = {
-    foo: 1
+    foo: 1,
+    bar: 1
 }
 const ITERATE_KEY = Symbol()
 
@@ -29,6 +30,20 @@ const p = new Proxy(obj, {
     ownKeys(target) {
         track(target, ITERATE_KEY)
         return Reflect.ownKeys(target)
+    },
+
+    // 删除属性时，调用 deleteProperty 拦截函数进行依赖收集
+    deleteProperty(target, key) {
+        // 检查被操作的属性是否是对象自己的属性
+        const hadKey = Object.prototype.hasOwnProperty.call(target, key)
+        const res = Reflect.deleteProperty(target, key)
+
+        if (res && hadKey) {
+            // 只有当被删除的属性是对象自己的属性并且成功删除时，才会触发更新
+            trigger(target, key, 'DELETE')
+        }
+
+        return res
     }
 })
 
@@ -64,7 +79,7 @@ function trigger(target, key, type) {
     })
 
     // 只有当操作类型为 'ADD' 时，才会触发 ITERATE_KEY 相关联的副作用函数的更新
-    if (type === 'ADD') {
+    if (type === 'ADD' || type === 'DELETE') {
         // 取得 ITERATE_KEY 相关联的副作用函数
         const iterateEffects = depsMap.get(ITERATE_KEY)
 
@@ -132,8 +147,12 @@ effect(() => {
 // 当我们**修改** foo 的值时，不会触发副作用函数
 // 因为是 ITERATE_KEY 与 副作用函数建立的联系，foo 与 副作用函数并没有建立联系
 // 所以这里不会触发副作用函数
-p.foo++
+// p.foo++
 
 // 修改操作不会对 for...in... 副作用函数产生影响，因为数据还就这么几个，又没变，遍历结果是一样的
 // 但添加不一样，添加了一个属性，所以需要再 触发 for...in...一次，修改就没必要触发了
-p.bar = 2
+// p.bar = 2
+
+// 只有被删除的属性是对象自己的属性才会触发更新
+// delete p.foo
+// delete p.oo
