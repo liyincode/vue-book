@@ -50,7 +50,7 @@ function createReactive(obj, isShallow = false, isReadonly = false) {
             if (target === receiver.raw) {
                 // 比较新值和旧值，只有当它们不全等，并且都不是 NaN 的时候才触发相应
                 if (oldVal !== newVal && (oldVal === oldVal || newVal === newVal)) {
-                    trigger(target, key, type)
+                    trigger(target, key, type, newVal)
                 }
             }
 
@@ -123,7 +123,7 @@ function track(target, key) {
     activeEffect.deps.push(deps)
 }
 
-function trigger(target, key, type) {
+function trigger(target, key, type, newVal) {
     const depsMap = bucket.get(target)
     if (!depsMap) return
 
@@ -158,6 +158,20 @@ function trigger(target, key, type) {
         lengthEffects && lengthEffects.forEach(effectFn => {
             if (effectFn !== activeEffect) {
                 effectsToRun.add(effectFn)
+            }
+        })
+    }
+
+    // 如果目标是数组，并且修改了数组的 length 属性
+    if (Array.isArray(target) && key === 'length') {
+        // 索引大于或等于新的 length 值的元素相关的副作用函数，都要执行
+        depsMap.forEach((effects, key) => {
+            if (key >= newVal) {
+                effects.forEach(effectFn => {
+                    if (effectFn !== activeEffect) {
+                        effectsToRun.add(effectFn)
+                    }
+                })
             }
         })
     }
@@ -209,13 +223,22 @@ function cleanup(effectFn) {
 
 const arr = reactive(['foo'])
 
-effect(() => {
-    console.log(arr.length)
-})
+// effect(() => {
+//     console.log(arr.length)
+// })
 
 // 并不会调用副作用函数，因为 arr.length 导致收集的是 length: effectFns key 为 length 的副作用函数集合
 // 当 arr[1] 去找的是 key 为 1 的副作用函数执行，但 effect 方法里并没有收集 key 为 1 的依赖，所以没找到
 // 无法执行
 // 以下语句将 arr 的 length 变为 2 了，长度变了，理应触发跟长度有关的副作用函数
-arr[1] = 'bar'
+// arr[1] = 'bar'
 
+
+effect(() => {
+    console.log(arr[0])
+})
+
+// 当依赖收集时，将 key 为 0 相关的副作用函数收集
+// 但当数组长度变为 0 后，等于是把数组清空了，也就是把索引为 0 的元素给删了，影响了它，按道理说会触发它的
+// 副作用函数
+arr.length = 10
