@@ -2,7 +2,7 @@ const ITERATE_KEY = Symbol()
 
 const bucket = new WeakMap();
 
-function reactive(obj) {
+function createReactive(obj, isShallow = false) {
   return new Proxy(obj, {
     get(target, key, receiver) {
       // 代理对象可通过 raw 属性访问原始数据
@@ -11,7 +11,13 @@ function reactive(obj) {
       }
 
       track(target, key)
+
       const res = Reflect.get(target, key, receiver)
+
+      if (isShallow) {
+        return res
+      }
+
       // 如果这个属性的值是对象，就开始递归代理它
       if (typeof res === 'object' && res !== null) {
         return reactive(res)
@@ -63,6 +69,14 @@ function reactive(obj) {
       return res
     }
   })
+}
+
+function reactive(obj) {
+  return createReactive(obj)
+}
+
+function shallowReactive(obj) {
+  return createReactive(obj, true)
 }
 
 function track(target, key) {
@@ -156,7 +170,7 @@ function cleanup(effectFn) {
 
 
 
-const obj = reactive({ foo: { bar: 1 } })
+const obj = shallowReactive({ foo: { bar: 1 } })
 effect(() => {
   console.log(obj.foo.bar)
 })
