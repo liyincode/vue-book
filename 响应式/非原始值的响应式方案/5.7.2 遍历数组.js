@@ -11,7 +11,7 @@ function createReactive(obj, isShallow = false, isReadonly = false) {
             }
 
             // 如果是只读的，意味着任何方式都无法修改它，所以没必要建立响应式联系
-            if (!isReadonly) {
+            if (!isReadonly && typeof key !== 'symbol') {
                 track(target, key)
             }
 
@@ -223,12 +223,12 @@ function cleanup(effectFn) {
 /// ///////////////
 
 
-const arr = reactive(['foo'])
+const arr = reactive(['foo', 'ccc'])
 
 effect(() => {
     console.log('触发')
-    for (const key in arr) {
-        console.log(key)
+    for (const val of arr.values()) {
+        console.log(val)
     }
 })
 
