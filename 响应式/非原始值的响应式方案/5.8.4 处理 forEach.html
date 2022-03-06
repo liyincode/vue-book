@@ -1,0 +1,277 @@
+<body></body>
+<script>
+    const ITERATE_KEY = Symbol()
+
+    const bucket = new WeakMap();
+
+    const mutableInsturmentations = {
+        get(key) {
+            const target = this.raw
+            track(target, key)
+
+            const had = target.has(key)
+            if (had) {
+                const res = target.get(key)
+                return typeof res === 'object' ? reactive(res) : res
+            }
+        },
+
+        add(key) {
+            const target = this.raw
+            // 优化性能，判断值是否存在，存在就不执行 trigger 了
+            const hadKey = target.has(key)
+            const res = target.add(key)
+            if (!hadKey) {
+                // 这样就可以触发通过访问 size 属性所收集的副作用函数执行了
+                trigger(target, key, 'ADD')
+            }
+
+            return res
+        },
+
+        set(key, value) {
+            const target = this.raw
+            const had = target.has(key)
+            const oldValue = target.get(key)
+            // 响应式数据设置到原始数据上的行为称为数据污染
+            // target.set(key, value)
+            // 如果 value.raw 如果存在的话，value 就是响应式对象了，获取 value.raw 就行,如果不存在证明还是原始对象
+            // 只有响应式对象里 get 访问器属性中才有 this.raw = target，原始对象里是没有拦截的
+            // 所以 value.raw 如果它是响应式对象必走拦截，然后设置好 raw 返回过来，原始对象就不可能这么操作
+            const rawValue = value.raw || value
+            // 目的就是原始对象中不能有代理对象
+            target.set(key, rawValue)
+            if (!had) {
+                trigger(target, key, 'ADD')
+            } else if (oldValue !== value || (oldValue === oldValue && value === value)) {
+                trigger(target, key, 'SET')
+            }
+        },
+
+        delete(key) {
+            const target = this.raw
+            const hadKey = target.has(key)
+            const res = target.delete(key)
+            if (hadKey) {
+                trigger(target, key, 'DELETE')
+            }
+
+            return res
+        },
+
+        forEach(callback, thisArg) {
+            const target = this.raw
+            track(target, ITERATE_KEY)
+            target.forEach(callback)
+
+            // 实现深响应，解决当前 forEach 的问题
+            const wrap = val => typeof val === 'object' ? reactive(val) : val
+            target.forEach((v, k) => {
+                // callback(wrap(v), wrap(k), this)
+                callback.call(thisArg, wrap(v), wrap(k), this)
+            })
+
+        }
+    }
+
+    function createReactive(obj, isShallow = false, isReadonly = false) {
+        return new Proxy(obj, {
+            get(target, key, receiver) {
+                if (key === 'raw') {
+                    return target
+                }
+                // this 绑定为 原始对象
+                if (key === 'size') {
+                    track(target, ITERATE_KEY)
+                    return Reflect.get(target, key, target)
+                }
+
+                return mutableInsturmentations[key]
+            }
+        })
+    }
+
+    // 新建一个备忘录，存储原始对象到代理对象的映射
+    const reactiveMap = new Map()
+
+    function reactive(obj) {
+        const existProxy = reactiveMap.get(obj)
+        if (existProxy) return existProxy
+
+        const proxy = createReactive(obj)
+        reactiveMap.set(obj, proxy)
+        return proxy
+    }
+
+    function shallowReactive(obj) {
+        return createReactive(obj, true)
+    }
+
+    function readonly(obj) {
+        return createReactive(obj, false, true)
+    }
+
+    function shallowReadonly(obj) {
+        return createReactive(obj, true, true)
+    }
+
+    function track(target, key) {
+        if (!activeEffect || !shouldTrack) return
+        let depsMap = bucket.get(target)
+        if (!depsMap) {
+            bucket.set(target, (depsMap = new Map()))
+        }
+
+        let deps = depsMap.get(key)
+        if (!deps) {
+            depsMap.set(key, (deps = new Set()))
+        }
+        deps.add(activeEffect)
+
+        activeEffect.deps.push(deps)
+    }
+
+    function trigger(target, key, type, newVal) {
+        const depsMap = bucket.get(target)
+        if (!depsMap) return
+
+        const effects = depsMap.get(key)
+
+
+        const effectsToRun = new Set()
+        effects && effects.forEach(effectFn => {
+            // 如果 trigger 触发执行的副作用函数与当前正在执行的函数相同，则不触发执行
+            if (effectFn !== activeEffect) {
+                effectsToRun.add(effectFn)
+            }
+        })
+
+        // 只有当操作类型为 'ADD' 时，才会触发 ITERATE_KEY 相关联的副作用函数的更新
+        if (type === 'ADD' || type === 'DELETE') {
+            // 取得 ITERATE_KEY 相关联的副作用函数
+            const iterateEffects = depsMap.get(ITERATE_KEY)
+
+            // ITERATE_KEY 相关联的函数也添加到 effectsToRun 中
+            iterateEffects && iterateEffects.forEach(effectFn => {
+                // 如果 trigger 触发执行的副作用函数与当前正在执行的函数相同，则不触发执行
+                if (effectFn !== activeEffect) {
+                    effectsToRun.add(effectFn)
+                }
+            })
+        }
+
+        // 当操作类型为 ADD 并且目标对象是数组时，取出并执行与 length 相关联的副作用函数
+        if (type === 'ADD' && Array.isArray(target)) {
+            const lengthEffects = depsMap.get('length')
+            lengthEffects && lengthEffects.forEach(effectFn => {
+                if (effectFn !== activeEffect) {
+                    effectsToRun.add(effectFn)
+                }
+            })
+        }
+
+        // 如果目标是数组，并且修改了数组的 length 属性
+        if (Array.isArray(target) && key === 'length') {
+            // 索引大于或等于新的 length 值的元素相关的副作用函数，都要执行
+            depsMap.forEach((effects, key) => {
+                console.log({key, newVal})
+                if (key >= newVal) {
+                    effects.forEach(effectFn => {
+                        if (effectFn !== activeEffect) {
+                            effectsToRun.add(effectFn)
+                        }
+                    })
+                }
+            })
+        }
+
+        effectsToRun.forEach(effectFn => {
+            // 如果副作用函数有调用器，就使用调用器来执行副作用函数
+            if (effectFn.options.scheduler) {
+                effectFn.options.scheduler(effectFn)
+            } else {
+                effectFn()
+            }
+        })
+    }
+
+    let activeEffect
+    const effectStack = []
+
+    function effect(fn, options = {}) {
+        const effectFn = () => {
+            cleanup(effectFn)
+            activeEffect = effectFn
+            effectStack.push(effectFn)
+            const res = fn()
+            effectStack.pop()
+            activeEffect = effectStack[effectStack.length - 1]
+            return res
+        }
+
+        // 将 option 挂载到副作用函数上
+        effectFn.options = options
+        effectFn.deps = []
+        if (!options.lazy) {
+            effectFn()
+        }
+        return effectFn
+    }
+
+    function cleanup(effectFn) {
+        for (let i = 0; i < effectFn.deps.length; i++) {
+            const deps = effectFn.deps[i]
+            deps.delete(effectFn)
+        }
+
+        effectFn.deps.length = 0;
+    }
+
+    const arrayInstrumentations = {}
+
+    ;['includes', 'indexOf', 'lastIndexOf'].forEach(method => {
+        const originMethod = Array.prototype[method]
+        arrayInstrumentations[method] = function (...args) {
+            // this 是代理对象，先在代理对象上查找
+            let res = originMethod.apply(this, args)
+            if (res === false) {
+                // 如果没找到，再通过 原始数组 中找
+                res = originMethod.apply(this.raw, args)
+            }
+
+            return res
+        }
+    })
+
+    // 是否进行跟踪，也就是是否调用 track 方法
+    let shouldTrack = true
+    ;['push', 'pop', 'shift', 'unshift', 'splice'].forEach(method => {
+        const originMethod = Array.prototype[method]
+        arrayInstrumentations[method] = function (...args) {
+            // 在调用原始方法之前，禁止跟踪
+            shouldTrack = false
+            let res = originMethod.apply(this, args)
+            // 调用完之后，允许跟踪，这样就禁止了在原始方法执行的时候依赖收集 length 和相关副作用函数
+            shouldTrack = true
+            return true
+        }
+    })
+
+    /// ///////////////
+
+    const key = { key: 1 }
+    const value = new Set([1, 2, 3])
+    const p = reactive(new Map([
+        [key, value]
+        ]))
+
+    effect(() => {
+        p.forEach(function (value, key) {
+            console.log(value.size)
+        })
+    })
+
+
+    // 这里不能按预期触发副作用函数，因为 p.get(key) 获得的是原始对象，原始对象 delete() 是没办法触发副作用函数更新的
+    // p.get(key).delete(1)
+</script>
