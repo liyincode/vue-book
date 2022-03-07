@@ -147,7 +147,12 @@
         })
 
         // 只有当操作类型为 'ADD' 时，才会触发 ITERATE_KEY 相关联的副作用函数的更新
-        if (type === 'ADD' || type === 'DELETE') {
+        if (
+          type === 'ADD' ||
+          type === 'DELETE' ||
+          // 如果操作类型是 SET 并且是 Map 类型的，也触发关联的副作用函数
+          (type === 'SET' && Object.prototype.toString.call(target) === '[object Map]')
+        ) {
             // 取得 ITERATE_KEY 相关联的副作用函数
             const iterateEffects = depsMap.get(ITERATE_KEY)
 
@@ -174,7 +179,6 @@
         if (Array.isArray(target) && key === 'length') {
             // 索引大于或等于新的 length 值的元素相关的副作用函数，都要执行
             depsMap.forEach((effects, key) => {
-                console.log({key, newVal})
                 if (key >= newVal) {
                     effects.forEach(effectFn => {
                         if (effectFn !== activeEffect) {
@@ -259,19 +263,31 @@
 
     /// ///////////////
 
-    const key = { key: 1 }
-    const value = new Set([1, 2, 3])
-    const p = reactive(new Map([
-        [key, value]
-        ]))
-
-    effect(() => {
-        p.forEach(function (value, key) {
-            console.log(value.size)
-        })
-    })
+    // const key = { key: 1 }
+    // const value = new Set([1, 2, 3])
+    // const p = reactive(new Map([
+    //     [key, value]
+    //     ]))
+    //
+    // effect(() => {
+    //     p.forEach(function (value, key) {
+    //         console.log(value.size)
+    //     })
+    // })
 
 
     // 这里不能按预期触发副作用函数，因为 p.get(key) 获得的是原始对象，原始对象 delete() 是没办法触发副作用函数更新的
     // p.get(key).delete(1)
+
+    const p = reactive(new Map([
+      ['key', 1]
+    ]))
+
+    effect(() => {
+      p.forEach(function (value, key) {
+        console.log(value)
+      })
+    })
+
+    p.set('key', 2)
 </script>
