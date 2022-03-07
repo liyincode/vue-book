@@ -272,7 +272,7 @@
 
         // 区分是否为 ref
         // 在 wrapper 上定义一个不可枚举的属性
-        Object.defineProperty(wrapper, '_v_isRef', {
+        Object.defineProperty(wrapper, '__v_isRef', {
             value: true
         })
 
@@ -308,49 +308,43 @@
         return ret
     }
 
+    function proxyRefs(target) {
+        return new Proxy(target, {
+            get(target, key, receiver) {
+                const value = Reflect.get(target, key, receiver)
+                // 自动脱 ref，如果读取的值是 ref，则返回它的 value
+                return value.__v_isRef ? value.value : value
+            },
+
+            set(target, key, newValue, receiver) {
+                const value = target[key]
+                if (value.__v_isRef) {
+                    value.value = newValue
+                    return true
+                }
+
+                return Reflect.set(target, key, newValue, receiver)
+            }
+        })
+    }
+
     /// ///////////////
     const obj = reactive({ foo: 1, bar: 2})
 
-    // const newObj = {
-    //     ...obj
-    // }
-    //
-    // effect(() => {
-    //     console.log(newObj.foo)
-    // })
-    //
-    // // 不会触发响应，因为 newObj 是被扩展运算符结构后的普通对象
-    // obj.foo = 100
-    //
-    // const newObj = {
-    //     foo: {
-    //         get value() {
-    //             return obj.foo
-    //         }
-    //     },
-    //
-    //     bar: {
-    //         get value() {
-    //             return obj.bar
-    //         }
-    //     }
-    // }
+    // const newObj = { ...toRefs(obj) }
 
-    // const newObj = {
-    //     foo: toRef(obj, 'foo'),
-    //     bar: toRef(obj, 'bar')
-    // }
+    const newObj = proxyRefs({ ...toRefs(obj)})
 
-    // const newObj = { ...toRefs(obj)}
-    //
-    // effect(() => {
-    //     console.log(newObj.foo.value)
-    // })
+    // 只能通过这种方式访问
+    // newObj.foo.value
+    // 无法通过以下方式访问
+    // newObj.foo
 
-    // obj.foo = 100
 
-    const refFoo = toRef(obj, 'foo')
-    refFoo.value = 100
+    console.log(newObj.foo)
+    console.log(newObj.bar)
 
-    console.log(refFoo.value)
+    // 自动脱 ref
+    newObj.foo = 100
+    console.log(newObj.foo)
 </script>
