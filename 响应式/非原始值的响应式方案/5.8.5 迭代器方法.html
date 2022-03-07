@@ -72,25 +72,36 @@ const mutableInsturmentations = {
     })
   },
 
-  [Symbol.iterator]() {
-    const target = this.raw
-    const itr = target[Symbol.iterator]()
+  [Symbol.iterator]: iterationMethod,
+  entries: iterationMethod
+}
 
-    const wrap = val => typeof val === 'object' && val !== null ? reactive(val) : val
+function iterationMethod() {
+  const target = this.raw
+  const itr = target[Symbol.iterator]()
 
-    track(target, ITERATE_KEY)
+  const wrap = val => typeof val === 'object' && val !== null ? reactive(val) : val
 
-    return {
-      next() {
-        // 调用原始迭代器的 next 方法获取 value 和 done
-        const { value, done } = itr.next()
-        return {
-          value: value ? [wrap(value[0]), wrap(value[1])] : value,
-          done
-        }
+  track(target, ITERATE_KEY)
+
+  return {
+    // 迭代器协议
+    next() {
+      // 调用原始迭代器的 next 方法获取 value 和 done
+      const { value, done } = itr.next()
+      return {
+        value: value ? [wrap(value[0]), wrap(value[1])] : value,
+        done
       }
+    },
+
+    // 可迭代协议
+    [Symbol.iterator]() {
+      return this
     }
   }
+
+
 }
 
 function createReactive(obj, isShallow = false, isReadonly = false) {
@@ -304,7 +315,13 @@ const p = reactive(new Map([
 ]))
 
 effect(() => {
-  for (const [key, value] of p) {
+  // 实现迭代器协议即可
+  // for (const [key, value] of p) {
+  //   console.log(key, value)
+  // }
+
+  // 实现可迭代协议即可
+  for (const [key, value] of p.entries()) {
     console.log(key, value)
   }
 })
