@@ -1,0 +1,85 @@
+<body>
+<div id="app"></div>
+</body>
+<script>
+    const vnode = {
+        type: 'div',
+        props: {
+            id: 'foo'
+        },
+        children: [
+            {
+                type: 'p',
+                children: 'hello'
+            }
+        ]
+    }
+
+    const renderer = createRenderer({
+        // 创建元素
+        createElement(tag) {
+            return document.createElement(tag)
+        },
+        // 用于设置元素的文本节点
+        setElement(el, text) {
+            el.textContent = text
+        },
+        // 用于在给定的 parent 下添加指定元素
+        insert(el, parent, anchor = null) {
+            parent.insertBefore(el, anchor)
+        }
+    })
+
+    function createRenderer(options) {
+        const {
+            createElement,
+            insert,
+            setElementText
+        } = options
+
+        function mountElement(vnode, container) {
+            const el = createElement(vnode)
+            if (typeof vnode.children === 'string') {
+                setElementText(vnode.children)
+            } else if (Array.isArray(vnode.children)) {
+                vnode.children.forEach(child => {
+                    patch(null, child, el)
+                })
+            }
+
+
+            // 将属性添加到对应的 dom 上
+            if (vnode.props) {
+                for (const key in vnode.props) {
+                    el[key] = vnode.props[key]
+                }
+            }
+
+            insert(el, container)
+        }
+
+        function patch(n1, n2, container) {
+            if (!n1) {
+                mountElement(n2, container)
+            } else {
+
+            }
+        }
+
+        function render(vnode, container) {
+            const el = createElement(vnode.type)
+            if (typeof vnode.children === 'string') {
+                setElementText(vnode.children)
+            }
+
+            insert(el, container)
+        }
+
+        return {
+            render
+        }
+    }
+
+    renderer.render(vnode, document.getElementById('#id'))
+
+</script>
