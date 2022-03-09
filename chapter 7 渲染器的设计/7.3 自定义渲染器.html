@@ -1,0 +1,99 @@
+<body>
+<div id="app">
+
+</div>
+</body>
+<script>
+// function createRenderer() {
+//   function patch(n1, n2, container) {
+//     if (!n1) {
+//       // 如果 旧vnode 不存在，意味着挂载
+//       mountElement(n2, container)
+//     } else {
+//       // 如果 旧vnode 存在，意味着打补丁更新
+//     }
+//   }
+//
+//   function mountElement(vnode, container) {
+//     // 创建 dom 元素
+//     const el = document.createElement(vnode.type)
+//     if (typeof vnode.children === 'string') {
+//       el.textContent = vnode.children
+//     }
+//     container.appendChild(el)
+//   }
+//
+//   function render(vnode, container) {
+//     if (vnode) {
+//       // 新 vnode 存在，将与其旧 vnode 一起传递过去，打补丁更新
+//       patch(container._vnode, vnode, container)
+//     } else {
+//       if (container._vnode) {
+//         // 旧 vnode 存在，且新 vnode 不存在，说明是卸载操作
+//         container.innerHTML = ''
+//       }
+//     }
+//
+//     // 保存 旧vnode
+//     container._vnode = vnode
+//   }
+//
+//   return {
+//     render
+//   }
+// }
+
+const vnode = {
+  type: 'h1',
+  children: 'hello'
+}
+
+// const renderer = createRenderer()
+renderer.render(vnode, document.getElementById('#id'))
+
+// 通用版本，可适配所有平台
+// 将所有设计到特定平台的操作给抽象出来，生成配置，这样实现了通用平台的目的
+const renderer = createRenderer({
+  // 创建元素
+  createElement(tag) {
+    return document.createElement(tag)
+  },
+  // 用于设置元素的文本节点
+  setElement(el, text) {
+    el.textContent = text
+  },
+  // 用于在给定的 parent 下添加指定元素
+  insert(el, parent, anchor = null) {
+    parent.insertBefore(el, anchor)
+  }
+})
+
+function createRenderer(options) {
+  const {
+    createElement,
+    insert,
+    setElementText
+  } = options
+
+  function mountElement(vnode, container) {
+
+  }
+
+  function patch(n1, n2, container) {
+
+  }
+
+  function render(vnode, container) {
+    const el = createElement(vnode.type)
+    if (typeof vnode.children === 'string') {
+      setElementText(vnode.children)
+    }
+
+    insert(el, container)
+  }
+
+  return {
+    render
+  }
+}
+</script>
