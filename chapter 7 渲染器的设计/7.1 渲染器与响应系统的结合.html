@@ -1,0 +1,29 @@
+<body>
+<div id="app"></div>
+</body>
+<script src="https://unpkg.com/@vue/reactivity@3.0.5/dist/reactivity.global.js"></script>
+<script>
+// // 最简单的渲染器
+// function renderer(domString, container) {
+//   container.innerHTML = domString
+// }
+//
+// let count = 1
+// renderer(`<h1>${count}</h1>`, document.getElementById('app'))
+
+const { effect, ref } = VueReactivity
+
+function renderer(domString, container) {
+  container.innerHTML = domString
+}
+
+const count = ref(1)
+
+effect(() => {
+  renderer(`<h1>${count.value}</h1>`, document.getElementById('app'))
+})
+
+setTimeout(() => {
+  count.value++
+}, 1000)
+</script>
