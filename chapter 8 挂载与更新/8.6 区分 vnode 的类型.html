@@ -1,0 +1,163 @@
+<body>
+<div id="app"></div>
+</body>
+<script>
+
+
+    function shouldSetAsProps(el, key, value) {
+        if (key === 'form' && el.tagName === 'INPUT') return false
+        return key in el
+    }
+
+    function createRenderer(options) {
+        const {
+            createElement,
+            insert,
+            setElementText,
+            patchProps
+        } = options
+
+        function mountElement(vnode, container) {
+            // 让 vnode.el 引用真实的 DOM 元素
+            const el = vnode.el = createElement(vnode.type)
+            if (typeof vnode.children === 'string') {
+                setElementText(el, vnode.children)
+            } else if (Array.isArray(vnode.children)) {
+                vnode.children.forEach(child => {
+                    patch(null, child, el)
+                })
+            }
+
+            // 将属性添加到对应的 dom 上
+            if (vnode.props) {
+                for (const key in vnode.props) {
+                    patchProps(el, key, null, vnode.props[key])
+                }
+            }
+
+            insert(el, container)
+        }
+
+        function patch(n1, n2, container) {
+            // 如果新旧 vnode 所描述的内容不同，把旧 vnode 卸载，然后再挂载新 vnode
+            if (n1 && n1.type !== n2.type) {
+                unmount(n1)
+                n1 = null
+            }
+
+            const { type } = n2
+            // 普通标签元素
+            if (typeof type === 'string') {
+                if (!n1) {
+                    mountElement(n2, container)
+                } else {
+                    patchElement(n1, n2)
+                }
+            } else if (type === 'object') {
+                // 如果 type 是对象，则描述的是组件
+            } else if (type === 'xxx') {
+                // 处理其它类型的 vnode
+            }
+        }
+
+
+        function patchElement(n1, n2) {
+            const el = n2.el = n1.el
+            const oldProps = n1.props
+            const newProps = n2.props
+
+            for (const key in newProps) {
+                // 如果当前这个标签上的属性的值有变化，就去更新这个属性的值
+                if (oldProps[key] !== newProps[key]) {
+                    patchProps(el, key, oldProps[key], newProps[key])
+                }
+            }
+
+            for (const key in oldProps) {
+                // 如果在新的标签上这个属性不存在了，旧把它删了
+                if (!(key in newProps)) {
+                    patchProps(el, key, oldProps[key], null)
+                }
+            }
+        }
+
+        function render(vnode, container) {
+            if (vnode) {
+                // 若 vnode 存在，打补丁更新
+                patch(vnode._vnode, vnode, container)
+            } else {
+                if (container._vnode) {
+                    // 如果旧vnode 存在，新vnode 不存在，说明是卸载操作
+                    unmount(container._vnode)
+                }
+            }
+
+            // 更新 _vnode 属性`
+            container._vnode = vnode
+        }
+
+        return {
+            render
+        }
+    }
+
+
+    function unmount(vnode) {
+        const parent = vnode.el.parentNode
+        if (parent) {
+            parent.removeChild(vnode.el)
+        }
+    }
+
+    const renderer = createRenderer({
+        // 创建元素
+        createElement(tag) {
+            return document.createElement(tag)
+        },
+        // 用于设置元素的文本节点
+        setElementText(el, text) {
+            el.textContent = text
+        },
+        // 用于在给定的 parent 下添加指定元素
+        insert(el, parent, anchor = null) {
+            parent.insertBefore(el, anchor)
+        },
+
+        // 更新属性
+        patchProps(el, key, prevValue, nextValue) {
+            if (key === 'class') {
+                // className 性能最优
+                el.className = nextValue || ''
+            } else if (shouldSetAsProps(el, key, nextValue)) {
+                // 获取 DOM properties 属性的类型
+                const type = typeof el[key]
+                const value = vnode.props[key]
+
+                // 如果是 boolean 类型，并且 value 为空字符串，则将值矫正为 true
+                if (type === 'boolean' && value === '') {
+                    el[key] = true
+                } else {
+                    el[key] = value
+                }
+            } else {
+                // 如果要设置的属性没有对应的 DOM properties，则使用 setAttribute 设置属性
+                el.setAttribute(key, vnode.props[key])
+            }
+        }
+    })
+
+
+    const vnode = {
+        type: 'p',
+        props: {
+            class: 'foo bar baz'
+        },
+        children: 'text'
+    }
+
+    renderer.render(vnode, document.getElementById('app'))
+    setTimeout(() => {
+        renderer.render(null, document.getElementById('app'))
+    }, 1000)
+
+</script>
