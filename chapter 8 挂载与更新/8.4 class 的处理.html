@@ -1,0 +1,118 @@
+<body>
+<div id="app"></div>
+</body>
+<script>
+// 因为 HTML Attributes 和 DOM Properties 的差别
+// 1. DOM Properties 与 HTML Properties 的名字不总是一模一样
+// 2. 并不是所有的 HTML Properties 都有 DOM Properties 对应的
+// 3. 不是所有的 DOM Properties 都有与之对应的 HTML Properties
+// 5. 使用 setAttributes 函数设置的值总是会被字符串化 如 el.setAttributes('disabled', false)
+// 被转换为 el.setAttributes('disabled', 'false') 进而导致用户不想禁用，结果会被禁用
+// 所以我们需要特殊处理某些 Boolean 属性
+const vnode = {
+  type: 'div',
+  props: {
+    id: 'foo'
+  },
+  children: [
+    {
+      type: 'p',
+      children: 'hello'
+    }
+  ]
+}
+
+const renderer = createRenderer({
+  // 创建元素
+  createElement(tag) {
+    return document.createElement(tag)
+  },
+  // 用于设置元素的文本节点
+  setElement(el, text) {
+    el.textContent = text
+  },
+  // 用于在给定的 parent 下添加指定元素
+  insert(el, parent, anchor = null) {
+    parent.insertBefore(el, anchor)
+  },
+
+  patchProps(el, key, prevValue, nextValue) {
+    if (key === 'class') {
+      // className 性能最优
+      el.className = nextValue || ''
+    } else if (shouldSetAsProps(el, key, nextValue)) {
+      // 获取 DOM properties 属性的类型
+      const type = typeof el[key]
+      const value = vnode.props[key]
+
+      // 如果是 boolean 类型，并且 value 为空字符串，则将值矫正为 true
+      if (type === 'boolean' && value === '') {
+        el[key] = true
+      } else {
+        el[key] = value
+      }
+    } else {
+      // 如果要设置的属性没有对应的 DOM properties，则使用 setAttribute 设置属性
+      el.setAttribute(key, vnode.props[key])
+    }
+  }
+})
+
+function shouldSetAsProps(el, key, value) {
+  if (key === 'form' && el.tagName === 'INPUT') return false
+  return key in el
+}
+
+function createRenderer(options) {
+  const {
+    createElement,
+    insert,
+    setElementText,
+    patchProps
+  } = options
+
+  function mountElement(vnode, container) {
+    const el = createElement(vnode)
+    if (typeof vnode.children === 'string') {
+      setElementText(vnode.children)
+    } else if (Array.isArray(vnode.children)) {
+      vnode.children.forEach(child => {
+        patch(null, child, el)
+      })
+    }
+
+    // 将属性添加到对应的 dom 上
+    if (vnode.props) {
+      for (const key in vnode.props) {
+        patchProps(el, key, null, vnode.props[key])
+      }
+    }
+
+    insert(el, container)
+  }
+
+  function patch(n1, n2, container) {
+    if (!n1) {
+      mountElement(n2, container)
+    } else {
+
+    }
+  }
+
+  function render(vnode, container) {
+    const el = createElement(vnode.type)
+    if (typeof vnode.children === 'string') {
+      setElementText(vnode.children)
+    }
+
+    insert(el, container)
+  }
+
+  return {
+    render
+  }
+}
+
+renderer.render(vnode, document.getElementById('#id'))
+
+</script>
