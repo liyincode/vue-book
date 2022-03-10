@@ -127,7 +127,9 @@
         patchProps(el, key, prevValue, nextValue) {
             if (/^on/.test(key)) {
                 // 事件处理
-                let invoker = el._vei
+                // 定义 el.vei 为一个对象，可避免挂载时事件被覆盖的问题
+                const invokers = el._vei || (el._vei = {})
+                let invoker = invokers[key]
                 const name = key.slice(2).toLowerCase()
                 if (nextValue) {
                     if (!invoker) {
@@ -170,6 +172,10 @@
         props: {
             onClick:  () => {
                 alert('clicked')
+            },
+
+            onContextmenu: () => {
+                alert('contextmenu')
             }
         },
         children: 'text'
