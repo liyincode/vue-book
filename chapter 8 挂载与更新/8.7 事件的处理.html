@@ -134,8 +134,13 @@
                 if (nextValue) {
                     if (!invoker) {
                         // 如果没有 invoker 缓存到 el._vei 中
-                        invoker = el._vei = (e) => {
-                            invoker.value(e)
+                        invoker = el._vei[key] = (e) => {
+                            if (Array.isArray(invoker.value)) {
+                                // 如果是数组，就逐个调用里面的函数
+                                invoker.value.forEach(fn => fn(e))
+                            } else {
+                                invoker.value(e)
+                            }
                         }
                         // 将真正的事件处理函数赋值给 invoker.value
                         invoker.value = nextValue
@@ -170,9 +175,14 @@
     const vnode = {
         type: 'p',
         props: {
-            onClick:  () => {
-                alert('clicked')
-            },
+            onClick:  [
+                () => {
+                    alert('clicked1')
+                },
+                () => {
+                    alert('clicked2')
+                }
+            ],
 
             onContextmenu: () => {
                 alert('contextmenu')
