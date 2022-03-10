@@ -34,14 +34,39 @@
         // 用于在给定的 parent 下添加指定元素
         insert(el, parent, anchor = null) {
             parent.insertBefore(el, anchor)
+        },
+
+      patchProps(el, key, prevValue, nextValue) {
+        // 判断 key 是否存在对应的 DOM Properties
+        if (shouldSetAsProps(el, key, nextValue)) {
+          // 获取 DOM properties 属性的类型
+          const type = typeof el[key]
+          const value = vnode.props[key]
+
+          // 如果是 boolean 类型，并且 value 为空字符串，则将值矫正为 true
+          if (type === 'boolean' && value === '') {
+            el[key] = true
+          } else {
+            el[key] = value
+          }
+        } else {
+          // 如果要设置的属性没有对应的 DOM properties，则使用 setAttribute 设置属性
+          el.setAttribute(key, vnode.props[key])
         }
+      }
     })
+
+    function shouldSetAsProps(el, key, value) {
+      if (key === 'form' && el.tagName === 'INPUT') return false
+      return key in el
+    }
 
     function createRenderer(options) {
         const {
             createElement,
             insert,
-            setElementText
+            setElementText,
+            patchProps
         } = options
 
         function mountElement(vnode, container) {
@@ -55,25 +80,11 @@
             }
 
 
+
             // 将属性添加到对应的 dom 上
             if (vnode.props) {
                 for (const key in vnode.props) {
-                    // 判断 key 是否存在对应的 DOM Properties
-                    if (key in el) {
-                        // 获取 DOM properties 属性的类型
-                        const type = typeof el[key]
-                        const value = vnode.props[key]
-
-                        // 如果是 boolean 类型，并且 value 为空字符串，则将值矫正为 true
-                        if (type === 'boolean' && value === '') {
-                            el[key] = true
-                        } else {
-                            el[key] = value
-                        }
-                    } else {
-                        // 如果要设置的属性没有对应的 DOM properties，则使用 setAttribute 设置属性
-                        el.setAttribute(key, vnode.props[key])
-                    }
+                  patchProps(el, key, null, vnode.props[key])
                 }
             }
 
