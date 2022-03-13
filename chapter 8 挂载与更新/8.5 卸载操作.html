@@ -107,7 +107,7 @@
         function render(vnode, container) {
             if (vnode) {
                 // 若 vnode 存在，打补丁更新
-                patch(vnode._vnode, vnode, container)
+                patch(container._vnode, vnode, container)
             } else {
                 if (container._vnode) {
                     // 如果旧vnode 存在，新vnode 不存在，说明是卸载操作
