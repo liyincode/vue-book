@@ -1,0 +1,207 @@
+<body>
+<div id="app"></div>
+</body>
+<script src="https://unpkg.com/@vue/reactivity@3.0.5/dist/reactivity.global.js"></script>
+
+<script>
+    function shouldSetAsProps(el, key, value) {
+        if (key === 'form' && el.tagName === 'INPUT') return false
+        return key in el
+    }
+
+    function createRenderer(options) {
+        const {
+            createElement,
+            insert,
+            setElementText,
+            patchProps
+        } = options
+
+        function mountElement(vnode, container) {
+            // 让 vnode.el 引用真实的 DOM 元素
+            const el = vnode.el = createElement(vnode.type)
+            if (typeof vnode.children === 'string') {
+                setElementText(el, vnode.children)
+            } else if (Array.isArray(vnode.children)) {
+                vnode.children.forEach(child => {
+                    patch(null, child, el)
+                })
+            }
+
+            // 将属性添加到对应的 dom 上
+            if (vnode.props) {
+                for (const key in vnode.props) {
+                    patchProps(el, key, null, vnode.props[key])
+                }
+            }
+
+            insert(el, container)
+        }
+
+        function patch(n1, n2, container) {
+            // 如果新旧 vnode 所描述的内容不同，把旧 vnode 卸载，然后再挂载新 vnode
+            if (n1 && n1.type !== n2.type) {
+                unmount(n1)
+                n1 = null
+            }
+
+            const { type } = n2
+            // 普通标签元素
+            if (typeof type === 'string') {
+                if (!n1) {
+                    mountElement(n2, container)
+                } else {
+                    patchElement(n1, n2)
+                }
+            } else if (type === 'object') {
+                // 如果 type 是对象，则描述的是组件
+            } else if (type === 'xxx') {
+                // 处理其它类型的 vnode
+            }
+        }
+
+
+        function patchElement(n1, n2) {
+            const el = n2.el = n1.el
+            const oldProps = n1.props
+            const newProps = n2.props
+
+            for (const key in newProps) {
+                // 如果当前这个标签上的属性的值有变化，就去更新这个属性的值
+                if (oldProps[key] !== newProps[key]) {
+                    patchProps(el, key, oldProps[key], newProps[key])
+                }
+            }
+
+            for (const key in oldProps) {
+                // 如果在新的标签上这个属性不存在了，旧把它删了
+                if (!(key in newProps)) {
+                    patchProps(el, key, oldProps[key], null)
+                }
+            }
+        }
+
+        function render(vnode, container) {
+            if (vnode) {
+                // 若 vnode 存在，打补丁更新
+                patch(container._vnode, vnode, container)
+            } else {
+                if (container._vnode) {
+                    // 如果旧vnode 存在，新vnode 不存在，说明是卸载操作
+                    unmount(container._vnode)
+                }
+            }
+
+            // 更新 _vnode 属性`
+            container._vnode = vnode
+        }
+
+        return {
+            render
+        }
+    }
+
+
+    function unmount(vnode) {
+        const parent = vnode.el.parentNode
+        if (parent) {
+            parent.removeChild(vnode.el)
+        }
+    }
+
+    const renderer = createRenderer({
+        // 创建元素
+        createElement(tag) {
+            return document.createElement(tag)
+        },
+        // 用于设置元素的文本节点
+        setElementText(el, text) {
+            el.textContent = text
+        },
+        // 用于在给定的 parent 下添加指定元素
+        insert(el, parent, anchor = null) {
+            parent.insertBefore(el, anchor)
+        },
+
+        // 更新属性
+        patchProps(el, key, prevValue, nextValue) {
+            if (/^on/.test(key)) {
+                // 事件处理
+                // 定义 el.vei 为一个对象，可避免挂载时事件被覆盖的问题
+                const invokers = el._vei || (el._vei = {})
+                let invoker = invokers[key]
+                const name = key.slice(2).toLowerCase()
+                if (nextValue) {
+                    if (!invoker) {
+                        // 如果没有 invoker 缓存到 el._vei 中
+                        invoker = el._vei[key] = (e) => {
+                            // 如果事件处理函数被绑定的时间晚于事件发生的时间，则不执行该事件处理函数
+                            if (e.timeStamp < invoker.attached) return
+                            if (Array.isArray(invoker.value)) {
+                                // 如果是数组，就逐个调用里面的函数
+                                invoker.value.forEach(fn => fn(e))
+                            } else {
+                                invoker.value(e)
+                            }
+                        }
+                        // 将真正的事件处理函数赋值给 invoker.value
+                        invoker.value = nextValue
+                        invoker.attached = performance.now()
+                        el.addEventListener(name, invoker)
+                    } else {
+                        // 如果 invoker 存在，意味着更新
+                        invoker.value = nextValue
+                    }
+                }
+            } else if (key === 'class') {
+                // className 性能最优
+                el.className = nextValue || ''
+            } else if (shouldSetAsProps(el, key, nextValue)) {
+                // 获取 DOM properties 属性的类型
+                const type = typeof el[key]
+                const value = vnode.props[key]
+
+                // 如果是 boolean 类型，并且 value 为空字符串，则将值矫正为 true
+                if (type === 'boolean' && value === '') {
+                    el[key] = true
+                } else {
+                    el[key] = value
+                }
+            } else {
+                // 如果要设置的属性没有对应的 DOM properties，则使用 setAttribute 设置属性
+                el.setAttribute(key, vnode.props[key])
+            }
+        }
+    })
+
+    const { effect, ref } = VueReactivity
+
+    const bol = ref(false)
+
+    effect(() => {
+        const vnode = {
+            type: 'div',
+            props: bol.value ? {
+                // 正常来说，这个 click 事件是无法触发的，但点击 p 元素后，会触发
+                // 是因为当点击 p 元素时将 bol.value = true，然后 effect 函数触发更新
+                // 当 effect 更新完之后这里绑定了click 事件，p 元素 click 事件会冒泡上来触发这个事件
+                onClick: () => {
+                    alert('父元素')
+                }
+            } : {},
+            children: [
+                {
+                    type: 'p',
+                    props: {
+                        onClick: () => {
+                            bol.value = true
+                        }
+                    },
+                    children: 'text'
+                }
+            ]
+        }
+        renderer.render(vnode, document.querySelector('#app'))
+    })
+
+</script>
