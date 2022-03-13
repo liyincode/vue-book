@@ -13,6 +13,8 @@
         const {
             createElement,
             insert,
+            createText,
+            setText,
             setElementText,
             patchProps
         } = options
@@ -59,14 +61,14 @@
                 // 如果新 vnode 的类型是 Text，则表明描述的是文本节点
                 if (!n1) {
                     // 创建文本节点
-                    const el = n2.el = document.createTextNode(n2.children)
+                    const el = n2.el = createText(n2.children)
                     // 将文本节点插入到容器中
                     insert(el, container)
                 } else {
                     // 如果旧节点存在
                     const el = n2.el = n1.el
                     if (n2.children !== n1.children) {
-                        el.nodeValue = n2.children
+                        setText(el, n2.children)
                     }
                 }
             }
@@ -170,6 +172,14 @@
             parent.insertBefore(el, anchor)
         },
 
+        createText(text) {
+            return document.createTextNode(text)
+        },
+
+        setText(el, text) {
+            el.nodeValue = text
+        },
+
         // 更新属性
         patchProps(el, key, prevValue, nextValue) {
             if (/^on/.test(key)) {
@@ -234,5 +244,5 @@
         children: '我是注释节点'
     }
 
-    renderer.render(newVnode, document.querySelector('#app'))
+    // renderer.render(newVnode, document.querySelector('#app'))
 </script>
