@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+<div id="app"></div>
+</body>
+
+<script>
+    function shouldSetAsProps(el, key, value) {
+        if (key === 'form' && el.tagName === 'INPUT') return false
+        return key in el
+    }
+
+    function createRenderer(options) {
+        const {
+            createElement,
+            insert,
+            createText,
+            setText,
+            setElementText,
+            patchProps
+        } = options
+
+        function mountElement(vnode, container) {
+            // 让 vnode.el 引用真实的 DOM 元素
+            const el = vnode.el = createElement(vnode.type)
+            if (typeof vnode.children === 'string') {
+                setElementText(el, vnode.children)
+            } else if (Array.isArray(vnode.children)) {
+                vnode.children.forEach(child => {
+                    patch(null, child, el)
+                })
+            }
+
+            // 将属性添加到对应的 dom 上
+            if (vnode.props) {
+                for (const key in vnode.props) {
+                    patchProps(el, key, null, vnode.props[key])
+                }
+            }
+
+            insert(el, container)
+        }
+
+        function patch(n1, n2, container) {
+            // 如果新旧 vnode 所描述的内容不同，把旧 vnode 卸载，然后再挂载新 vnode
+            if (n1 && n1.type !== n2.type) {
+                unmount(n1)
+                n1 = null
+            }
+
+            const { type } = n2
+            // 普通标签元素
+            if (typeof type === 'string') {
+                if (!n1) {
+                    mountElement(n2, container)
+                } else {
+                    patchElement(n1, n2)
+                }
+            } else if (type === 'object') {
+                // 如果 type 是对象，则描述的是组件
+            } else if (type === Text) {
+                // 如果新 vnode 的类型是 Text，则表明描述的是文本节点
+                if (!n1) {
+                    // 创建文本节点
+                    const el = n2.el = createText(n2.children)
+                    // 将文本节点插入到容器中
+                    insert(el, container)
+                } else {
+                    // 如果旧节点存在
+                    const el = n2.el = n1.el
+                    if (n2.children !== n1.children) {
+                        setText(el, n2.children)
+                    }
+                }
+            } else if (type === Fragment) {
+                if (!n1) {
+                    // 如果旧 vnode 不存在，挂载 Fragment 的 children 子节点
+                    n2.children.forEach(c => patch(null, c, container))
+                } else {
+                    // 如果旧 vnode 存在，则只需要更新 Fragment 的 children 即可
+                    patchChildren(n1, n2, container)
+                }
+            }
+        }
+
+
+        function patchElement(n1, n2) {
+            const el = n2.el = n1.el
+            const oldProps = n1.props
+            const newProps = n2.props
+
+            // 1. 更新 props
+            for (const key in newProps) {
+                // 如果当前这个标签上的属性的值有变化，就去更新这个属性的值
+                if (oldProps[key] !== newProps[key]) {
+                    patchProps(el, key, oldProps[key], newProps[key])
+                }
+            }
+
+            for (const key in oldProps) {
+                // 如果在新的标签上这个属性不存在了，旧把它删了
+                if (!(key in newProps)) {
+                    patchProps(el, key, oldProps[key], null)
+                }
+            }
+
+            // 2. 更新元素子节点
+            patchChildren(n1, n2, el)
+        }
+
+        function patchChildren(n1, n2, container) {
+            // 判断新子节点是否是文本子节点
+            if (typeof n2.children === 'string') {
+                if (Array.isArray(n1.children)) {
+                    // 子节点的类型有三种可能：没有子节点，文本子节点，一组子节点
+                    // 只有当子节点是一组子节点时，逐一卸载，其他情况什么都不用做
+                    n1.children.forEach(c => unmount(c))
+                }
+                setElementText(container, n2.children)
+            } else if (Array.isArray(n2.children)) {
+                    const oldChildren = n1.children
+                    const newChildren = n2.children
+
+                    for (let i = 0; i < newChildren.length; i++) {
+                        const newVNode = newChildren[i]
+                        for (let j = 0; j < oldChildren.length; j++) {
+                            const oldVNode = oldChildren[j]
+                            if (newVNode.key === oldVNode.key) {
+                                patch(oldVNode, newVNode, container)
+                                break
+                            }
+                        }
+                    }
+
+
+            } else {
+                // 新子节点不存在
+                if (Array.isArray(n1.children)) {
+                    n1.children.forEach(c => unmount(c))
+                } else if (typeof n2.children === 'string') {
+                    setElementText(container, '')
+                }
+                // 如果也没有旧子节点，那么什么都不用做
+            }
+        }
+
+        function render(vnode, container) {
+            if (vnode) {
+                // 若 vnode 存在，打补丁更新
+                patch(container._vnode, vnode, container)
+            } else {
+                if (container._vnode) {
+                    // 如果旧vnode 存在，新vnode 不存在，说明是卸载操作
+                    unmount(container._vnode)
+                }
+            }
+
+            // 更新 _vnode 属性`
+            container._vnode = vnode
+        }
+
+        return {
+            render
+        }
+    }
+
+
+    function unmount(vnode) {
+        const parent = vnode.el.parentNode
+        if (parent) {
+            parent.removeChild(vnode.el)
+        }
+    }
+
+    const renderer = createRenderer({
+        // 创建元素
+        createElement(tag) {
+            return document.createElement(tag)
+        },
+        // 用于设置元素的文本节点
+        setElementText(el, text) {
+            el.textContent = text
+        },
+        // 用于在给定的 parent 下添加指定元素
+        insert(el, parent, anchor = null) {
+            parent.insertBefore(el, anchor)
+        },
+
+        createText(text) {
+            return document.createTextNode(text)
+        },
+
+        setText(el, text) {
+            el.nodeValue = text
+        },
+
+        // 更新属性
+        patchProps(el, key, prevValue, nextValue) {
+            if (/^on/.test(key)) {
+                // 事件处理
+                // 定义 el.vei 为一个对象，可避免挂载时事件被覆盖的问题
+                const invokers = el._vei || (el._vei = {})
+                let invoker = invokers[key]
+                const name = key.slice(2).toLowerCase()
+                if (nextValue) {
+                    if (!invoker) {
+                        // 如果没有 invoker 缓存到 el._vei 中
+                        invoker = el._vei[key] = (e) => {
+                            // 如果事件处理函数被绑定的时间晚于事件发生的时间，则不执行该事件处理函数
+                            if (e.timeStamp < invoker.attached) return
+                            if (Array.isArray(invoker.value)) {
+                                // 如果是数组，就逐个调用里面的函数
+                                invoker.value.forEach(fn => fn(e))
+                            } else {
+                                invoker.value(e)
+                            }
+                        }
+                        // 将真正的事件处理函数赋值给 invoker.value
+                        invoker.value = nextValue
+                        invoker.attached = performance.now()
+                        el.addEventListener(name, invoker)
+                    } else {
+                        // 如果 invoker 存在，意味着更新
+                        invoker.value = nextValue
+                    }
+                }
+            } else if (key === 'class') {
+                // className 性能最优
+                el.className = nextValue || ''
+            } else if (shouldSetAsProps(el, key, nextValue)) {
+                // 获取 DOM properties 属性的类型
+                const type = typeof el[key]
+                const value = vnode.props[key]
+
+                // 如果是 boolean 类型，并且 value 为空字符串，则将值矫正为 true
+                if (type === 'boolean' && value === '') {
+                    el[key] = true
+                } else {
+                    el[key] = value
+                }
+            } else {
+                // 如果要设置的属性没有对应的 DOM properties，则使用 setAttribute 设置属性
+                el.setAttribute(key, vnode.props[key])
+            }
+        }
+    })
+
+
+    const Fragment = Symbol()
+    const newVnode = {
+        type: 'div',
+        children: [
+            { type: 'p', children: '1', key: 1 },
+            { type: 'p', children: '2', key: 2 },
+            { type: 'p', children: 'hello', key: 3 }
+        ]
+    }
+    renderer.render(newVnode, document.querySelector('#app'))
+
+    const oldVnode = {
+        type: 'div',
+        children: [
+            { type: 'p', children: 'world', key: 3 },
+            { type: 'p', children: '1', key: 1 },
+            { type: 'p', children: '2', key: 2 }
+        ]
+    }
+
+    setTimeout(() => {
+        console.log('update')
+        renderer.render(oldVnode, document.querySelector('#app'))
+    }, 400);
+</script>
+</html>
