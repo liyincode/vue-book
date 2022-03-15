@@ -151,20 +151,23 @@
             let newStartVNode = newChildren[newStartIndex]
             let newEndVNode = newChildren[newStartIndex]
 
-            if (oldStartVNode.key === newStartVNode.key) {
+            while (oldStartIndex <= oldEndIndex && newStartIndex <= newEndIndex) {
+                if (oldStartVNode.key === newStartVNode.key) {
 
-            } else if (oldEndVNode.key === newEndVNode.key) {
+                } else if (oldEndVNode.key === newEndVNode.key) {
 
-            } else if (oldStartVNode.key === newEndVNode.key) {
+                } else if (oldStartVNode.key === newEndVNode.key) {
 
-            } else if (oldEndVNode.key === newStartVNode.key) {
-                patch(oldEndVNode, newStartVNode, container)
-                //
-                insert(oldEndVNode.el, container, oldStartVNode.el)
+                } else if (oldEndVNode.key === newStartVNode.key) {
+                    patch(oldEndVNode, newStartVNode, container)
+                    //
+                    insert(oldEndVNode.el, container, oldStartVNode.el)
 
-                oldEndVNode = oldChildren[--oldEndIndex]
-                newStartVNode = newChildren[++newStartIndex]
+                    oldEndVNode = oldChildren[--oldEndIndex]
+                    newStartVNode = newChildren[++newStartIndex]
+                }
             }
+
         }
 
         function render(vnode, container) {
