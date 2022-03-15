@@ -158,8 +158,12 @@
                     // 节点在新的顺序中仍然处于尾部，不需要移动，但仍需要打补丁更新
                     patch(oldEndVNode, newEndVNode, container)
                     oldEndVNode = oldChildren[--oldEndIndex]
-                    newEndVNode = newChildren[--newEndVNode]
+                    newEndVNode = newChildren[++newEndVNode]
                 } else if (oldStartVNode.key === newEndVNode.key) {
+                    patch(oldStartVNode.key, newEndVNode.key, container)
+                    // 将旧的一组子节点的头部节点对应的真实 DOM 节点移动到
+                    // 旧的一组子节点的尾部节点对应的真实 DOM 节点后面
+                    insert(oldStartVNode.el, container, oldEndVNode.el.nextSibling)
 
                 } else if (oldEndVNode.key === newStartVNode.key) {
                     patch(oldEndVNode, newStartVNode, container)
