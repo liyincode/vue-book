@@ -146,25 +146,29 @@
             let newStartIndex = 0
             let newEndIndex = newChildren.length - 1
 
-            let oldStartVNode = oldChildren[oldEndIndex]
+            let oldStartVNode = oldChildren[oldStartIndex]
             let oldEndVNode = oldChildren[oldEndIndex]
             let newStartVNode = newChildren[newStartIndex]
-            let newEndVNode = newChildren[newStartIndex]
+            let newEndVNode = newChildren[newEndIndex]
 
             while (oldStartIndex <= oldEndIndex && newStartIndex <= newEndIndex) {
                 if (oldStartVNode.key === newStartVNode.key) {
+                    patch(oldStartVNode, newStartVNode, container)
+                    oldStartVNode = oldChildren[++oldStartIndex]
+                    newStartVNode = newChildren[++newStartIndex]
 
                 } else if (oldEndVNode.key === newEndVNode.key) {
                     // 节点在新的顺序中仍然处于尾部，不需要移动，但仍需要打补丁更新
                     patch(oldEndVNode, newEndVNode, container)
                     oldEndVNode = oldChildren[--oldEndIndex]
-                    newEndVNode = newChildren[++newEndVNode]
+                    newEndVNode = newChildren[--newEndIndex]
                 } else if (oldStartVNode.key === newEndVNode.key) {
                     patch(oldStartVNode.key, newEndVNode.key, container)
                     // 将旧的一组子节点的头部节点对应的真实 DOM 节点移动到
                     // 旧的一组子节点的尾部节点对应的真实 DOM 节点后面
                     insert(oldStartVNode.el, container, oldEndVNode.el.nextSibling)
-
+                    oldStartVNode = oldChildren[++oldStartIndex]
+                    newEndVNode = newChildren[--newEndIndex]
                 } else if (oldEndVNode.key === newStartVNode.key) {
                     patch(oldEndVNode, newStartVNode, container)
                     //
@@ -176,6 +180,7 @@
             }
 
         }
+
 
         function render(vnode, container) {
             if (vnode) {
@@ -285,7 +290,8 @@
         children: [
             { type: 'p', children: '1', key: 1 },
             { type: 'p', children: '2', key: 2 },
-            { type: 'p', children: 'hello', key: 3 }
+            { type: 'p', children: '3', key: 3 },
+            { type: 'p', children: '4', key: 4 },
         ]
     }
     renderer.render(newVnode, document.querySelector('#app'))
@@ -293,8 +299,10 @@
     const oldVnode = {
         type: 'div',
         children: [
+            { type: 'p', children: '4', key: 4 },
+            { type: 'p', children: '2', key: 2 },
             { type: 'p', children: '1', key: 1 },
-            { type: 'p', children: '2', key: 2 }
+            { type: 'p', children: '3', key: 3 },
         ]
     }
 
