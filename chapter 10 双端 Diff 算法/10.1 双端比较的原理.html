@@ -155,7 +155,10 @@
                 if (oldStartVNode.key === newStartVNode.key) {
 
                 } else if (oldEndVNode.key === newEndVNode.key) {
-
+                    // 节点在新的顺序中仍然处于尾部，不需要移动，但仍需要打补丁更新
+                    patch(oldEndVNode, newEndVNode, container)
+                    oldEndVNode = oldChildren[--oldEndIndex]
+                    newEndVNode = newChildren[--newEndVNode]
                 } else if (oldStartVNode.key === newEndVNode.key) {
 
                 } else if (oldEndVNode.key === newStartVNode.key) {
