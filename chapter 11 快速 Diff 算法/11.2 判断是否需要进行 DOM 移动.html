@@ -191,19 +191,8 @@
                 const oldStart = j
                 const newStart = j
 
-                // 遍历旧的一组节点
-                // for (let i = oldStart; i <= oldEnd; i++) {
-                //     const oldVNode = oldChildren[i]
-                //     // 遍历新的一组子节点
-                //     for (let k = newStart; k < newEnd; k++) {
-                //         const newVNode = newChildren[k]
-                //         if (oldVNode.key === newVNode.key) {
-                //             patch(oldVNode, newVNode, container)
-                //             source[k - newStart] = i
-                //         }
-                //     }
-                // }
-                // 上述填充 source 的算法的复杂度为 O(n^2) ，复杂度较高，影响性能
+                let moved = false
+                let pos = 0
 
                 // 使用索引表的方式优化性能
                 const keyIndex = {}
@@ -221,6 +210,16 @@
                         newVNode = newChildren[k]
                         patch(oldVNode, newVNode, container)
                         source[k - newStart] = i
+
+                        // 判断节点需要移动
+                        // 这里主要看在旧的一组子节点里，它是自增的，它在新的节点组里找到一个，记住索引
+                        // 第二次，它又在新的节点组里找到一个，但是发现这个的索引比刚才的那个索引小，说明
+                        // 对应的旧的节点的为止是要移动的
+                        if (k < pos) {
+                            moved = true
+                        } else {
+                            pos = k
+                        }
                     } else {
                         // 没找到
                         unmount(oldVNode)
