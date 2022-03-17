@@ -202,6 +202,13 @@
                 }
             }
 
+            // 循环结束后检查索引值的情况
+            if (oldEndIndex < oldStartIndex && newStartIndex <= newStartIndex) {
+                // 如果满足条件，说明有新的节点遗漏，需要挂载它们
+                for (let i = newStartIndex; i <= newEndIndex; i++) {
+                    patch(null, newChildren[i], container, oldStartVNode.el)
+                }
+            }
         }
 
 
@@ -323,13 +330,13 @@
         children: [
             { type: 'p', children: '4', key: 4 },
             { type: 'p', children: '1', key: 1 },
-            { type: 'p', children: '3', key: 3 },
             { type: 'p', children: '2', key: 2 },
+            { type: 'p', children: '3', key: 3 },
         ]
     }
     setTimeout(() => {
         console.log('update')
         renderer.render(newVnode, document.querySelector('#app'))
-    }, 400);
+    }, 800);
 </script>
 </html>
