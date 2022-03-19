@@ -196,7 +196,7 @@
 
                 // 使用索引表的方式优化性能
                 const keyIndex = {}
-                for (let i = newStart; i <= oldEnd; i++) {
+                for (let i = newStart; i <= newEnd; i++) {
                     keyIndex[newChildren[i].key] = i
                 }
 
