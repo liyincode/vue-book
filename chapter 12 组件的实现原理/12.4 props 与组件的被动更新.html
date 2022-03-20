@@ -163,8 +163,34 @@
             // 将组件实例设置到 vnode 上，用于后续更新
             vnode.component = instance
 
-            // created 钩子
-            created && created.call(state)
+            // 创建渲染上下文对象，本质上是组件实例的代理
+            const renderContext = new Proxy(instance, {
+                get(target, key, receiver) {
+                    const { state, props } = target
+                    // 先尝试读取自身状态 data 的数据
+                    if (state && key in state) {
+                        return state[key]
+                    } else if (key in props) { // 如果组件自身没有该数据，则尝试从 props 中读取
+                        return props[key]
+                    } else {
+                        console.error('不存在')
+                    }
+                },
+
+                set(target, key, value, receiver) {
+                    const { state, props } = target
+                    if (state && key in state) {
+                        state[key] = value
+                    } else if (key in props) {
+                        props[key] = value
+                    } else {
+                        console.error('不存在')
+                    }
+                }
+            })
+
+            // created 调用，并绑定渲染上下文对象
+            created && created.call(renderContext)
 
             effect(() => {
                 // 将 render 函数的 this 设置为 state
