@@ -103,7 +103,10 @@
 
         function mountComponent(vnode, container, anchor) {
             const componentOptions = vnode.type
-            const { render, data } = componentOptions
+            const { render, data, beforeCreate, created, beforeMount, mounted, beforeUpdate, updated } = componentOptions
+
+            // beforeCreate 钩子
+            beforeCreate && beforeCreate()
 
             // 使用 data() 获得原始函数，使用 reactive 函数将其包装为响应式数据
             const state = reactive(data())
@@ -121,16 +124,27 @@
             // 将组件实例设置到 vnode 上，用于后续更新
             vnode.component = instance
 
+            // created 钩子
+            created && created.call(state)
+
             effect(() => {
                 // 将 render 函数的 this 设置为 state
                 // render 函数内部可以通过 this 访问组件自身状态数据
                 const subTree = render.call(state, state)
 
                 if (!instance.isMounted) {
+                    // beforeMount 钩子
+                    beforeMount && beforeMount.call(state)
                     patch(null, subTree, container, anchor)
                     instance.isMounted = true
+                    // mounted 钩子
+                    mounted && mounted.call(state)
                 } else {
+                    // beforeUpdate 钩子
+                    beforeUpdate && beforeUpdate.call(state)
                     patch(instance.subTree, subTree, container, anchor)
+                    // updated 钩子
+                    updated && updated.call(state)
                 }
 
                 instance.subTree = subTree
