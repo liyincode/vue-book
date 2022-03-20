@@ -108,13 +108,32 @@
             // 使用 data() 获得原始函数，使用 reactive 函数将其包装为响应式数据
             const state = reactive(data())
 
+            // 定义组件实例，一个组件实例本质上就是一个对象，包含组件有关的状态信息
+            const instance = {
+                // 组件自身的状态数据，即 data
+                state,
+                // 表示组件是否已挂载
+                isMounted: false,
+                // 组件所渲染的内容
+                subTree: null
+            }
+
+            // 将组件实例设置到 vnode 上，用于后续更新
+            vnode.component = instance
 
             effect(() => {
                 // 将 render 函数的 this 设置为 state
                 // render 函数内部可以通过 this 访问组件自身状态数据
                 const subTree = render.call(state, state)
 
-                patch(null, subTree, container, anchor)
+                if (!instance.isMounted) {
+                    patch(null, subTree, container, anchor)
+                    instance.isMounted = true
+                } else {
+                    patch(instance.subTree, subTree, container, anchor)
+                }
+
+                instance.subTree = subTree
             }, {
                 scheduler: quequeJob
             })
