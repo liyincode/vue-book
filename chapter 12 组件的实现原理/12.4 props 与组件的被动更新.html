@@ -13,7 +13,7 @@
 </body>
 
 <script>
-    const { reactive, effect, ref } = VueReactivity
+    const { reactive, effect, ref, shallowReactive } = VueReactivity
 
     function shouldSetAsProps(el, key) {
         if (key === 'form' && el.tagName === 'INPUT') return false
@@ -103,7 +103,7 @@
 
         function mountComponent(vnode, container, anchor) {
             const componentOptions = vnode.type
-            const { render, data, beforeCreate, created, beforeMount, mounted, beforeUpdate, updated } = componentOptions
+            const { render, props: propsOption, data, beforeCreate, created, beforeMount, mounted, beforeUpdate, updated } = componentOptions
 
             // beforeCreate 钩子
             beforeCreate && beforeCreate()
@@ -111,10 +111,14 @@
             // 使用 data() 获得原始函数，使用 reactive 函数将其包装为响应式数据
             const state = reactive(data())
 
+            // 解析出 props 数据与 attrs 数据
+            const [props, attrs] = resolveProps(propsOption, vnode.props)
+
             // 定义组件实例，一个组件实例本质上就是一个对象，包含组件有关的状态信息
             const instance = {
                 // 组件自身的状态数据，即 data
                 state,
+                props: shallowReactive(props),
                 // 表示组件是否已挂载
                 isMounted: false,
                 // 组件所渲染的内容
@@ -151,6 +155,23 @@
             }, {
                 scheduler: quequeJob
             })
+        }
+
+        function resolveProps(options, propsData) {
+            const props = {}
+            const attrs = {}
+            // 遍历传给组件的 props 数据
+            for (const key in propsData) {
+                if (key in options) {
+                    // 如果给组件传递的 props 数据在组件自身的 props 选项中有定义，视为合法的 props
+                    props[key] = propsData[key]
+                } else {
+                    // attrs
+                    attrs[key] = propsData[key]
+                }
+            }
+                return [props, attrs]
+            }
         }
 
         // 任务缓存队列
@@ -470,23 +491,25 @@
 
     const MyComponent = {
         name: 'MyComponent',
-        // data 函数定义组件自身的状态
-        data() {
-            return {
-                foo: 'hello world'
-            }
+
+        props: {
+            title: String
         },
 
         render() {
             return {
                 type: 'div',
-                children: 'text'
+                children: this.title
             }
         }
     }
 
     const vnode = {
-        type: MyComponent
+        type: MyComponent,
+        props: {
+            title: 'aaa',
+            other: this.val
+        }
     }
 
     renderer.render(vnode, document.querySelector('#app'))
