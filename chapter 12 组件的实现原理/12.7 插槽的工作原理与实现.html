@@ -149,6 +149,9 @@
             // 解析出 props 数据与 attrs 数据
             const [props, attrs] = resolveProps(propsOption, vnode.props)
 
+            // component 的 children 就是插槽
+            const slots = vnode.children || {}
+
             // 定义组件实例，一个组件实例本质上就是一个对象，包含组件有关的状态信息
             const instance = {
                 // 组件自身的状态数据，即 data
@@ -157,7 +160,8 @@
                 // 表示组件是否已挂载
                 isMounted: false,
                 // 组件所渲染的内容
-                subTree: null
+                subTree: null,
+                slots
             }
 
             function emit(event, ...payload) {
@@ -171,7 +175,7 @@
                 }
             }
 
-            const setupContext = { attrs, emit }
+            const setupContext = { attrs, emit, slots }
             // 避免用户修改 props，将 props 包装为只读
             const setupResult = setup(shallowReadonly(instance.props), setupContext)
             // 数据状态
@@ -191,7 +195,10 @@
             // 创建渲染上下文对象，本质上是组件实例的代理
             const renderContext = new Proxy(instance, {
                 get(target, key, receiver) {
-                    const { state, props } = target
+                    const { state, props, slots } = target
+
+                    if (key === 'slots') return slots
+
                     // 先尝试读取自身状态 data 的数据
                     if (state && key in state) {
                         return state[key]
