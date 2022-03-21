@@ -160,7 +160,18 @@
                 subTree: null
             }
 
-            const setupContext = { attrs }
+            function emit(event, ...payload) {
+                const eventName = `on${event[0].toUpperCase() + event.slice(1)}`
+                // 从 props 中寻找对应的事件处理函数
+                const handler = instance.props[eventName]
+                if (handler) {
+                    handler(...payload)
+                } else {
+                    console.log('事件不存在')
+                }
+            }
+
+            const setupContext = { attrs, emit }
             // 避免用户修改 props，将 props 包装为只读
             const setupResult = setup(shallowReadonly(instance.props), setupContext)
             // 数据状态
@@ -267,7 +278,8 @@
             const attrs = {}
             // 遍历传给组件的 props 数据
             for (const key in propsData) {
-                if (key in options) {
+                // 以字符串 on 开头的 props，都将其添加到 props 数据中
+                if (key in options || key.startsWith('on')) {
                     // 如果给组件传递的 props 数据在组件自身的 props 选项中有定义，视为合法的 props
                     props[key] = propsData[key]
                 } else {
@@ -573,14 +585,14 @@
     const MyComponent = {
         name: 'MyComponent',
 
-        props: {
-            title: String
-        },
+        setup(props, { emit }) {
+            emit('change', 1, 2)
 
-        render() {
-            return {
-                type: 'div',
-                children: this.title
+            return () => {
+                return {
+                    type: 'div',
+                    children: 'text'
+                }
             }
         }
     }
@@ -588,8 +600,7 @@
     const vnode = {
         type: MyComponent,
         props: {
-            title: 'aaa',
-            other: this.val
+            onChange: handler
         }
     }
 
