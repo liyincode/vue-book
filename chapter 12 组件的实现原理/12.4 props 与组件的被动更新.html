@@ -144,7 +144,7 @@
             beforeCreate && beforeCreate()
 
             // 使用 data() 获得原始函数，使用 reactive 函数将其包装为响应式数据
-            const state = reactive(data())
+            const state = data ? reactive(data()) : null
 
             // 解析出 props 数据与 attrs 数据
             const [props, attrs] = resolveProps(propsOption, vnode.props)
@@ -195,26 +195,24 @@
             effect(() => {
                 // 将 render 函数的 this 设置为 state
                 // render 函数内部可以通过 this 访问组件自身状态数据
-                const subTree = render.call(state, state)
+                const subTree = render.call(renderContext, renderContext)
 
                 if (!instance.isMounted) {
                     // beforeMount 钩子
-                    beforeMount && beforeMount.call(state)
+                    beforeMount && beforeMount.call(renderContext)
                     patch(null, subTree, container, anchor)
                     instance.isMounted = true
                     // mounted 钩子
-                    mounted && mounted.call(state)
+                    mounted && mounted.call(renderContext)
                 } else {
                     // beforeUpdate 钩子
-                    beforeUpdate && beforeUpdate.call(state)
+                    beforeUpdate && beforeUpdate.call(renderContext)
                     patch(instance.subTree, subTree, container, anchor)
                     // updated 钩子
-                    updated && updated.call(state)
+                    updated && updated.call(renderContext)
                 }
 
                 instance.subTree = subTree
-            }, {
-                scheduler: quequeJob
             })
         }
 
@@ -553,12 +551,9 @@
     const Fragment = Symbol()
 
     const MyComponent = {
-        name: 'MyComponent',
-
         props: {
-            title: String
+            title: String,
         },
-
         render() {
             return {
                 type: 'div',
@@ -570,12 +565,20 @@
     const vnode = {
         type: MyComponent,
         props: {
-            title: 'aaa',
-            other: this.val
+            title: 'aaa'
         }
     }
 
     renderer.render(vnode, document.querySelector('#app'))
+
+    setTimeout(() => {
+        renderer.render({
+            type: MyComponent,
+            props: {
+                title: 'A Small Title'
+            }
+        }, document.querySelector('#app'))
+    }, 2000);
 
 
 
