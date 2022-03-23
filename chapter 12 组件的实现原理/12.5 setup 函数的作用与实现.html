@@ -5,7 +5,7 @@
     <meta name="viewport"
           content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>Document</title>
+    <title>12.5 setup 函数的作用与实现</title>
     <script src="https://unpkg.com/@vue/reactivity@3.0.5/dist/reactivity.global.js"></script>
 </head>
 <body>
@@ -14,6 +14,49 @@
 
 <script>
     const { reactive, effect, ref, shallowReactive, shallowReadonly } = VueReactivity
+
+    function lis(arr) {
+        const p = arr.slice()
+        const result = [0]
+        let i, j, u, v, c
+        const len = arr.length
+        for (i = 0; i < len; i++) {
+            const arrI = arr[i]
+            if (arrI !== 0) {
+                j = result[result.length - 1]
+                if (arr[j] < arrI) {
+                    p[i] = j
+                    result.push(i)
+                    continue
+                }
+                u = 0
+                v = result.length - 1
+                while (u < v) {
+                    c = ((u + v) / 2) | 0
+                    if (arr[result[c]] < arrI) {
+                        u = c + 1
+                    } else {
+                        v = c
+                    }
+                }
+                if (arrI < arr[result[u]]) {
+                    if (u > 0) {
+                        p[i] = result[u - 1]
+                    }
+                    result[u] = i
+                }
+            }
+        }
+        u = result.length
+        v = result[u - 1]
+        while (u-- > 0) {
+            result[u] = v
+            v = p[v]
+        }
+        return result
+    }
+
+    const Fragment = Symbol()
 
     function shouldSetAsProps(el, key) {
         if (key === 'form' && el.tagName === 'INPUT') return false
@@ -144,7 +187,7 @@
             beforeCreate && beforeCreate()
 
             // 使用 data() 获得原始函数，使用 reactive 函数将其包装为响应式数据
-            const state = reactive(data())
+            const state = data ? reactive(data()) : null
 
             // 解析出 props 数据与 attrs 数据
             const [props, attrs] = resolveProps(propsOption, vnode.props)
@@ -213,49 +256,49 @@
             effect(() => {
                 // 将 render 函数的 this 设置为 state
                 // render 函数内部可以通过 this 访问组件自身状态数据
-                const subTree = render.call(state, state)
+                const subTree = render.call(renderContext, renderContext)
 
                 if (!instance.isMounted) {
                     // beforeMount 钩子
-                    beforeMount && beforeMount.call(state)
+                    beforeMount && beforeMount.call(renderContext)
                     patch(null, subTree, container, anchor)
                     instance.isMounted = true
                     // mounted 钩子
-                    mounted && mounted.call(state)
+                    mounted && mounted.call(renderContext)
                 } else {
                     // beforeUpdate 钩子
-                    beforeUpdate && beforeUpdate.call(state)
+                    beforeUpdate && beforeUpdate.call(renderContext)
                     patch(instance.subTree, subTree, container, anchor)
                     // updated 钩子
-                    updated && updated.call(state)
+                    updated && updated.call(renderContext)
                 }
 
                 instance.subTree = subTree
             }, {
-                scheduler: quequeJob
+                scheduler: queueJob
             })
         }
 
         // 任务缓存队列
-        const queque = new Set()
+        const queue = new Set()
         // 是否刷新任务队列
         let isFlushing = false
         // 创建一个立即 resolve 的 Promise 实例
         const p = Promise.resolve()
 
         // 将一个任务添加到缓冲队列中，并开始刷新列表
-        function quequeJob(job) {
+        function queueJob(job) {
             if (!isFlushing) {
                 // 避免重复刷新
                 isFlushing = true
                 // 在微任务中刷新缓冲队列
                 p.then(() => {
                     try {
-                        queque.forEach(job => job())
+                        queue.forEach(job => job())
                     } finally {
                         // 重置状态
                         isFlushing = false
-                        queque.size = 0
+                        queue.size = 0
                     }
                 })
             }
@@ -568,19 +611,15 @@
     })
 
 
-    const Fragment = Symbol()
 
     const MyComponent = {
-        name: 'MyComponent',
-
         props: {
-            title: String
+            foo: String
         },
-
-        render() {
-            return {
-                type: 'div',
-                children: this.title
+        setup(props, setupContext) {
+            console.log({ props, setupContext })
+            return () => {
+                return { type: 'div', children: `hello ${props.foo}`}
             }
         }
     }
@@ -588,8 +627,7 @@
     const vnode = {
         type: MyComponent,
         props: {
-            title: 'aaa',
-            other: this.val
+            foo: 'aaa'
         }
     }
 
@@ -597,45 +635,5 @@
 
 
 
-    function lis(arr) {
-        const p = arr.slice()
-        const result = [0]
-        let i, j, u, v, c
-        const len = arr.length
-        for (i = 0; i < len; i++) {
-            const arrI = arr[i]
-            if (arrI !== 0) {
-                j = result[result.length - 1]
-                if (arr[j] < arrI) {
-                    p[i] = j
-                    result.push(i)
-                    continue
-                }
-                u = 0
-                v = result.length - 1
-                while (u < v) {
-                    c = ((u + v) / 2) | 0
-                    if (arr[result[c]] < arrI) {
-                        u = c + 1
-                    } else {
-                        v = c
-                    }
-                }
-                if (arrI < arr[result[u]]) {
-                    if (u > 0) {
-                        p[i] = result[u - 1]
-                    }
-                    result[u] = i
-                }
-            }
-        }
-        u = result.length
-        v = result[u - 1]
-        while (u-- > 0) {
-            result[u] = v
-            v = p[v]
-        }
-        return result
-    }
 </script>
 </html>
