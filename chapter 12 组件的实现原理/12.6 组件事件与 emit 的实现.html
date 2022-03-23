@@ -297,6 +297,7 @@
 
         // 将一个任务添加到缓冲队列中，并开始刷新列表
         function queueJob(job) {
+            queue.add(job)
             if (!isFlushing) {
                 // 避免重复刷新
                 isFlushing = true
