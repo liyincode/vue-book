@@ -5,7 +5,7 @@
     <meta name="viewport"
           content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>12.8 注册生命周期</title>
+    <title>13.2.1 封装 defineAsyncComponent 函数</title>
     <script src="https://unpkg.com/@vue/reactivity@3.0.5/dist/reactivity.global.js"></script>
 </head>
 <body>
@@ -69,6 +69,8 @@
         }
 
         function patch(n1, n2, container, anchor) {
+            console.log(n2)
+            debugger;
             // 如果新旧 vnode 所描述的内容不同，把旧 vnode 卸载，然后再挂载新 vnode
             if (n1 && n1.type !== n2.type) {
                 unmount(n1)
@@ -83,8 +85,6 @@
                 } else {
                     patchElement(n1, n2)
                 }
-            } else if (type === 'object') {
-                // 如果 type 是对象，则描述的是组件
             } else if (type === Text) {
                 // 如果新 vnode 的类型是 Text，则表明描述的是文本节点
                 if (!n1) {
@@ -198,19 +198,22 @@
 
             // 设置当前实例
             setCurrentInstance(instance)
-            // 避免用户修改 props，将 props 包装为只读
-            const setupResult = setup(shallowReadonly(instance.props), setupContext)
-            // 重置当前组件实例
-            setCurrentInstance(null)
             // 数据状态
             let setupState = null
-            if (typeof setupResult === 'function') {
-                if (render) console.error(`setup 函数返回渲染函数, render 选项将被忽略`)
-                // 将 setupResult 作为渲染函数
-                render = setupResult
-            } else {
-                // 如果返回值不是函数，那就是当前组件的数据状态
-                setupState = setupResult
+            if (setup) {
+                // 避免用户修改 props，将 props 包装为只读
+                const setupResult = setup(shallowReadonly(instance.props), setupContext)
+                // 重置当前组件实例
+                setCurrentInstance(null)
+
+                if (typeof setupResult === 'function') {
+                    if (render) console.error(`setup 函数返回渲染函数, render 选项将被忽略`)
+                    // 将 setupResult 作为渲染函数
+                    render = setupResult
+                } else {
+                    // 如果返回值不是函数，那就是当前组件的数据状态
+                    setupState = setupResult
+                }
             }
 
             // 将组件实例设置到 vnode 上，用于后续更新
@@ -255,22 +258,23 @@
             effect(() => {
                 // 将 render 函数的 this 设置为 state
                 // render 函数内部可以通过 this 访问组件自身状态数据
-                const subTree = render.call(state, state)
+                console.log(render)
+                const subTree = render.call(renderContext, renderContext)
 
                 if (!instance.isMounted) {
                     // beforeMount 钩子
-                    beforeMount && beforeMount.call(state)
+                    beforeMount && beforeMount.call(renderContext)
                     patch(null, subTree, container, anchor)
                     instance.isMounted = true
                     // mounted 钩子
-                    mounted && mounted.call(state)
+                    mounted && mounted.call(renderContext)
                     instance.mounted && instance.mounted.forEach(hook => hook.call(renderContext))
                 } else {
                     // beforeUpdate 钩子
-                    beforeUpdate && beforeUpdate.call(state)
+                    beforeUpdate && beforeUpdate.call(renderContext)
                     patch(instance.subTree, subTree, container, anchor)
                     // updated 钩子
-                    updated && updated.call(state)
+                    updated && updated.call(renderContext)
                 }
 
                 instance.subTree = subTree
@@ -612,33 +616,41 @@
         }
     })
 
+    function defineAsyncComponent(loader) {
+        let InnerComp = null
+        return {
+            name: 'AsyncComponentWrapper',
+            setup() {
+                let loaded = ref(false)
+                loader().then(c => {
+                    InnerComp = c
+                    loaded.value = true
+                })
 
-
-    const MyComponent = {
-        name: 'MyComponent',
-
-        setup(props, { emit }) {
-            onMounted(() => {
-                console.log('mounted1')
-            })
-            onMounted(() => {
-                console.log('mounted2')
-            })
-            onMounted(() => {
-                console.log('mounted3')
-            })
-
-            return () => {
-                return {
-                    type: 'div',
-                    children: 'text'
+                return () => {
+                    return loaded.value ? { type: InnerComp } : { type: Text, children: 'aaa'}
                 }
             }
         }
     }
 
+
     const vnode = {
-        type: MyComponent
+        type: defineAsyncComponent(() => {
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    resolve({
+                        name: 'testComponent',
+                        render() {
+                            return {
+                               type: 'p',
+                               children: '成功啦'
+                            }
+                        }
+                    })
+                }, 3000)
+            })
+        })
     }
 
     renderer.render(vnode, document.querySelector('#app'))
