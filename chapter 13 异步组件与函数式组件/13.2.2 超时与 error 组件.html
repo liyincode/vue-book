@@ -616,40 +616,74 @@
         }
     })
 
-    function defineAsyncComponent(loader) {
+    function defineAsyncComponent(options) {
+        if (typeof options === 'function') {
+            options.loader = options
+        }
+
+        const { loader } = options
+
         let InnerComp = null
         return {
             name: 'AsyncComponentWrapper',
             setup() {
+                // 代表是否已加载完成
                 let loaded = ref(false)
+                // 代表是否超时
+                let timeout = ref(false)
                 loader().then(c => {
                     InnerComp = c
                     loaded.value = true
                 })
 
+                let timer = null
+                if (options.timeout) {
+                    timer = setTimeout(() => {
+                        timeout.value = true
+                    }, options.timeout)
+                }
+
+                const placeholder = { type: Text, children: ''}
+
                 return () => {
-                    return loaded.value ? { type: InnerComp } : { type: Text, children: 'aaa'}
+                    if (loaded.value) {
+                        return { type: InnerComp }
+                    } else if (timeout.value) {
+                        return options.errorComponent ? { type: options.errorComponent } : placeholder
+                    }
                 }
             }
         }
     }
 
+    const MyErrorComp = {
+        render() {
+            return {
+                type: 'p',
+                children: '获取异步组件错误'
+            }
+        }
+    }
 
     const vnode = {
-        type: defineAsyncComponent(() => {
-            return new Promise((resolve) => {
-                setTimeout(() => {
-                    resolve({
-                        name: 'testComponent',
-                        render() {
-                            return {
-                                type: 'p',
-                                children: '成功啦'
+        type: defineAsyncComponent({
+            loader: () => {
+                return new Promise((resolve) => {
+                    setTimeout(() => {
+                        resolve({
+                            name: 'testComponent',
+                            render() {
+                                return {
+                                    type: 'p',
+                                    children: '成功啦'
+                                }
                             }
-                        }
-                    })
-                }, 3000)
-            })
+                        })
+                    }, 3000)
+                })
+            },
+            timeout: 2000,
+            errorComponent: MyErrorComp
         })
     }
 
