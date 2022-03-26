@@ -69,8 +69,7 @@
         }
 
         function patch(n1, n2, container, anchor) {
-            console.log(n2)
-            debugger;
+            console.log('patch', { n1, n2, container, anchor })
             // 如果新旧 vnode 所描述的内容不同，把旧 vnode 卸载，然后再挂载新 vnode
             if (n1 && n1.type !== n2.type) {
                 unmount(n1)
@@ -258,9 +257,8 @@
             effect(() => {
                 // 将 render 函数的 this 设置为 state
                 // render 函数内部可以通过 this 访问组件自身状态数据
-                console.log(render)
                 const subTree = render.call(renderContext, renderContext)
-
+                console.log(instance)
                 if (!instance.isMounted) {
                     // beforeMount 钩子
                     beforeMount && beforeMount.call(renderContext)
@@ -537,6 +535,7 @@
 
 
     function unmount(vnode) {
+        console.log('unmount vnode', vnode)
         const parent = vnode.el.parentNode
         if (parent) {
             parent.removeChild(vnode.el)
@@ -631,25 +630,34 @@
                 let loaded = ref(false)
                 // 代表是否超时
                 let timeout = ref(false)
-                loader().then(c => {
+                // 定义 error ，当错误发生时，用来存储错误对象
+                let error = ref(null)
+                loader()
+                    .then(c => {
                     InnerComp = c
                     loaded.value = true
-                })
+                    })
+                    .catch(err => error.value = err)
 
                 let timer = null
                 if (options.timeout) {
                     timer = setTimeout(() => {
                         timeout.value = true
+                        const err = new Error(`这个异步组件已超时 ${options.timeout}ms`)
+                        error.value = err.message
                     }, options.timeout)
                 }
 
-                const placeholder = { type: Text, children: ''}
+                const placeholder = { type: Text, children: '111'}
 
                 return () => {
                     if (loaded.value) {
                         return { type: InnerComp }
-                    } else if (timeout.value) {
-                        return options.errorComponent ? { type: options.errorComponent } : placeholder
+                    } else if (error.value && options.errorComponent) {
+                        console.log(error.value)
+                        return { type: options.errorComponent, props: { error: error.value }}
+                    } else {
+                        return placeholder
                     }
                 }
             }
@@ -657,10 +665,13 @@
     }
 
     const MyErrorComp = {
+        props: {
+            error: String|Object
+        },
         render() {
             return {
                 type: 'p',
-                children: '获取异步组件错误'
+                children: this.error
             }
         }
     }
@@ -679,7 +690,7 @@
                                 }
                             }
                         })
-                    }, 3000)
+                    }, 4000)
                 })
             },
             timeout: 2000,
