@@ -193,13 +193,12 @@
                 }
             }
 
-            const setupContext = { attrs, emit, slots }
-
-            // 设置当前实例
-            setCurrentInstance(instance)
             // 数据状态
             let setupState = null
             if (setup) {
+                const setupContext = { attrs, emit, slots }
+                // 设置当前实例
+                setCurrentInstance(instance)
                 // 避免用户修改 props，将 props 包装为只读
                 const setupResult = setup(shallowReadonly(instance.props), setupContext)
                 // 重置当前组件实例
@@ -211,7 +210,7 @@
                     render = setupResult
                 } else {
                     // 如果返回值不是函数，那就是当前组件的数据状态
-                    setupState = setupResult
+                    setupState = setupContext
                 }
             }
 
@@ -258,7 +257,7 @@
                 // 将 render 函数的 this 设置为 state
                 // render 函数内部可以通过 this 访问组件自身状态数据
                 const subTree = render.call(renderContext, renderContext)
-                console.log(instance)
+                console.log('effect', instance)
                 if (!instance.isMounted) {
                     // beforeMount 钩子
                     beforeMount && beforeMount.call(renderContext)
@@ -536,6 +535,10 @@
 
     function unmount(vnode) {
         console.log('unmount vnode', vnode)
+        if (typeof vnode.type === 'object') {
+            unmount(vnode.component.subTree)
+            return
+        }
         const parent = vnode.el.parentNode
         if (parent) {
             parent.removeChild(vnode.el)
@@ -632,12 +635,28 @@
                 let timeout = ref(false)
                 // 定义 error ，当错误发生时，用来存储错误对象
                 let error = ref(null)
+
+                // 代表是否正在加载，默认为 false
+                const loading = ref(false)
+                let loadingTimer = null
+                if (options.delay) {
+                    loadingTimer = setTimeout(() => {
+                        loading.value = true
+                    }, options.delay)
+                } else {
+                    loading.value = true
+                }
+
                 loader()
                     .then(c => {
                         InnerComp = c
                         loaded.value = true
                     })
                     .catch(err => error.value = err)
+                    .finally(() => {
+                        loading.value = false
+                        clearTimeout(loadingTimer)
+                    })
 
                 let timer = null
                 if (options.timeout) {
@@ -656,6 +675,8 @@
                     } else if (error.value && options.errorComponent) {
                         console.log(error.value)
                         return { type: options.errorComponent, props: { error: error.value }}
+                    } else if (loading.value && options.loadingComponent) {
+                        return { type: options.loadingComponent}
                     } else {
                         return placeholder
                     }
@@ -664,6 +685,15 @@
         }
     }
 
+    const InnerComp = {
+        name: 'InnerComp',
+        setup() {
+            return () => ({
+                type: 'span',
+                children: 'inner'
+            })
+        }
+    }
     const MyErrorComp = {
         props: {
             error: String|Object
@@ -676,26 +706,48 @@
         }
     }
 
-    const vnode = {
-        type: defineAsyncComponent({
-            loader: () => {
-                return new Promise((resolve) => {
-                    setTimeout(() => {
-                        resolve({
-                            name: 'testComponent',
-                            render() {
-                                return {
-                                    type: 'p',
-                                    children: '成功啦'
+    const MyComponent = {
+        name: 'MyComponent',
+        props: {
+            title: String
+        },
+        setup(props, { emit, slots }) {
+            return () => {
+                return {
+                    type: 'div',
+                    children: [
+                        {
+                            type: defineAsyncComponent({
+                                loader: () => {
+                                    return new Promise((resolve) => {
+                                        setTimeout(() => {
+                                            resolve(InnerComp)
+                                        }, 2000)
+                                    })
+                                },
+                                timeout: 0,
+                                errorComponent: MyErrorComp,
+                                // 延迟 200ms 展示 loading 组件
+                                delay: 200,
+                                loadingComponent: {
+                                    setup() {
+                                        return () => {
+                                            return { type: 'h2', children: 'loading...'}
+                                        }
+                                    }
                                 }
-                            }
-                        })
-                    }, 4000)
-                })
-            },
-            timeout: 2000,
-            errorComponent: MyErrorComp
-        })
+                            })
+                        }
+                    ]
+                }
+            }
+        }
+    }
+    const vnode = {
+        type: MyComponent,
+        props: {
+            title: 'Hello World'
+        }
     }
 
     renderer.render(vnode, document.querySelector('#app'))
