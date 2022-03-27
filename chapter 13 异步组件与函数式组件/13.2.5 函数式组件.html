@@ -106,7 +106,7 @@
                     // 如果旧 vnode 存在，则只需要更新 Fragment 的 children 即可
                     patchChildren(n1, n2, container)
                 }
-            } else if (typeof type === 'object') {
+            } else if (typeof type === 'object' || typeof type === 'function') {
                 if (!n1) {
                     // 挂载组件
                     mountComponent(n2, container, anchor)
@@ -153,7 +153,18 @@
         }
 
         function mountComponent(vnode, container, anchor) {
-            const componentOptions = vnode.type
+            // 检查是否是函数式组件
+            const isFunctional = typeof vnode.type === 'function'
+
+            let componentOptions = vnode.type
+            // 如果是函数式组件
+            if (isFunctional) {
+                componentOptions = {
+                    render: vnode.type,
+                    props: vnode.type.props
+                }
+            }
+
             let { render, setup, props: propsOption, data, beforeCreate, created, beforeMount, mounted, beforeUpdate, updated } = componentOptions
 
             // beforeCreate 钩子
@@ -809,10 +820,18 @@
         console.log(res)
     })
 
+    // 函数式组件
+    function MyFuncComp(props) {
+        return { type: 'h1', children: props.title}
+    }
 
+    // 给函数式组件添加静态 props 属性
+    MyFuncComp.props = {
+        title: String
+    }
 
     const vnode = {
-        type: MyComponent,
+        type: MyFuncComp,
         props: {
             title: 'Hello World'
         }
