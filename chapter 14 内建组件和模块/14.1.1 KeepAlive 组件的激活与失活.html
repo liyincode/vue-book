@@ -108,8 +108,13 @@
                 }
             } else if (typeof type === 'object' || typeof type === 'function') {
                 if (!n1) {
-                    // 挂载组件
-                    mountComponent(n2, container, anchor)
+                    // 如果该组件已经被 KeepAlive，不会重新挂载，而是调用 _activate 激活
+                    if (n2.keepAlive) {
+                        n2.keepAliveInstance._activate(n2, container, anchor)
+                    } else {
+                        // 挂载组件
+                        mountComponent(n2, container, anchor)
+                    }
                 } else {
                     // 更新组件
                     patchComponent(n1, n2, anchor)
@@ -190,7 +195,19 @@
                 subTree: null,
                 slots,
                 // 存储 onMounted 函数注册的生命周期钩子函数
-                mounted: []
+                mounted: [],
+                // 只有 KeepAlive 组件的实例下才会有 keepAliveCtx 属性
+                keepAliveCtx: null
+            }
+
+            const isKeepAlive = vnode.type.__isKeepAlive
+            if (isKeepAlive) {
+                instance.keepAliveCtx = {
+                    move(vnode, container, anchor) {
+                        insert(vnode.component.subTree.el, container, anchor)
+                    },
+                    createElement
+                }
             }
 
             function emit(event, ...payload) {
@@ -546,8 +563,16 @@
 
     function unmount(vnode) {
         console.log('unmount vnode', vnode)
-        if (typeof vnode.type === 'object') {
-            unmount(vnode.component.subTree)
+        if (vnode.type === 'Fragment') {
+            vnode.children.forEach(c => unmount(c))
+        } else if (typeof vnode.type === 'object') {
+            if (vnode.shouldKeepAlive) {
+                // 对于被 KeepAlive 的组件，我们不是卸载而是失活，通过调用父组件，即 KeepAlive 组件的
+                // _deActivate 函数将其失活
+                vnode.keepAliveInstance._deActivate(vnode)
+            } else {
+                unmount(vnode.component.subTree)
+            }
             return
         }
         const parent = vnode.el.parentNode
@@ -727,7 +752,117 @@
         }
     }
 
+    const InnerComp = {
+        name: 'InnerComp',
+        setup() {
+            return () => ({
+                type: 'span',
+                children: 'inner'
+            })
+        }
+    }
+    const MyErrorComp = {
+        props: {
+            error: String|Object
+        },
+        render() {
+            return {
+                type: 'p',
+                children: this.error
+            }
+        }
+    }
 
+    const MyComponent = {
+        name: 'MyComponent',
+        setup(props, { emits, slots }) {
+            const counter = ref(0)
+
+            return () => {
+                return {
+                    type: 'button',
+                    props: {
+                        onClick() {
+                            counter.value++
+                        }
+                    },
+                    children: `count is ${counter.value}`
+                }
+            }
+        }
+    }
+    // 创建一个缓存对象
+    // key: vnode.key
+    // value: vnode
+    const cache = new Map()
+    const KeepAlive = {
+        __isKeepAlive: true,
+        setup(props, { slots }) {
+
+            // 当前 KeepAlive 组件的实例
+            const instance = currentInstance
+            // keepAlive 组件存在特殊的 KeepAliveCtx 对象，会暴露渲染器的一些内部方法
+            const { move, createElement } = instance.keepAliveCtx
+
+            // 创建隐匿容器
+            const storageContainer = createElement('div')
+
+            // keepAlive 组件的实例会添加两个内部函数
+            // 这两个函数会在渲染器中被调用
+            instance._deActivate = vnode => {
+                move(vnode, storageContainer)
+            }
+            instance._activate = (vnode, container, anchor) => {
+                move(vnode, container, anchor)
+            }
+
+            return () => {
+                // keepAlive 的默认插槽就是要被 KeepAlive 的组件
+                let rawVNode = slots.default()
+                // 如果不是组件，直接渲染即可，因为非组件的虚拟节点无法被 KeepAlive
+                if (typeof rawVNode.type !== 'object') {
+                    return rawVNode
+                }
+
+                // 在挂载时先获取缓存的组件
+                const cachedVNode = cache.get(rawVNode.type)
+                if (cachedVNode) {
+                    // 如果有缓存的内容，则说明不应该执行挂载，而应该执行激活
+                    rawVNode.component = cachedVNode.component
+                    // 设置标记，避免渲染器重新挂载
+                    rawVNode.keepAlive = true
+                } else {
+                    cache.set(rawVNode.type, rawVNode)
+                }
+
+                // 在组件添加 shouldKeepAlive 属性，避免渲染器真的将组件卸载
+                rawVNode.shouldKeepAlive = true
+                // 以便在渲染器中访问
+                rawVNode.keepAliveInstance = instance
+
+                return rawVNode
+            }
+        }
+    }
+
+    const vnode = {
+        type: KeepAlive,
+        children: {
+            default() {
+                return { type: MyComponent}
+            }
+        }
+    }
+
+    renderer.render(vnode, document.querySelector('#app'))
+
+    setTimeout(() => {
+        renderer.render(null, document.querySelector('#app'))
+    }, 2000)
+
+    setTimeout(() => {
+        renderer.render(vnode, document.querySelector('#app'))
+    }, 4000)
 
 </script>
 </html>
