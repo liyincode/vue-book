@@ -626,6 +626,32 @@
         const { loader } = options
 
         let InnerComp = null
+
+        // 记录重试次数
+        let retries = 0
+        function load() {
+            return loader()
+                .catch(err => {
+                    // 如果用户指定了 onError 回调，则将控制权交给用户
+                    if (options.onError) {
+                        return new Promise((resolve, reject) => {
+                            // 重试
+                            const retry = () => {
+                                resolve(load())
+                                retries++
+                            }
+                            // 失败
+                            const fail = () => reject(err)
+                            options.onError(retry, fail, retries)
+                        })
+                    } else {
+                        throw err
+                    }
+
+                })
+
+        }
+
         return {
             name: 'AsyncComponentWrapper',
             setup() {
@@ -647,13 +673,18 @@
                     loading.value = true
                 }
 
-                loader()
+                load()
                     .then(c => {
+                        console.log('then', c)
                         InnerComp = c
                         loaded.value = true
                     })
-                    .catch(err => error.value = err)
+                    .catch(err => {
+                        console.log('catch', err)
+                        error.value = err
+                    })
                     .finally(() => {
+                        console.log('finally')
                         loading.value = false
                         clearTimeout(loadingTimer)
                     })
@@ -706,6 +737,7 @@
         }
     }
 
+    let counter = 0
     const MyComponent = {
         name: 'MyComponent',
         props: {
@@ -719,9 +751,9 @@
                         {
                             type: defineAsyncComponent({
                                 loader: () => {
-                                    return new Promise((resolve) => {
+                                    return new Promise((r, j) => {
                                         setTimeout(() => {
-                                            resolve(InnerComp)
+                                            counter > 2 ? r(InnerComp) : j('error...')
                                         }, 2000)
                                     })
                                 },
@@ -735,6 +767,11 @@
                                             return { type: 'h2', children: 'loading...'}
                                         }
                                     }
+                                },
+                                onError(retry, reject, retires) {
+                                    console.log('开始重试', retires)
+                                    counter = retires
+                                    retry()
                                 }
                             })
                         }
@@ -743,6 +780,36 @@
             }
         }
     }
+
+    function fetch() {
+        return new Promise((resolve, reject) => {
+            setTimeout(() => {
+                reject('err')
+            }, 1000)
+        })
+    }
+
+    // 接受一个 onError 回调函数
+    function load(onError) {
+        const p = fetch()
+        return p.catch(err => {
+            return new Promise((resolve, reject) => {
+                const retry = () => resolve(load(onError))
+                const fail = () => reject(err)
+                onError(retry, fail)
+            })
+        })
+    }
+
+    load(
+        retry => {
+            retry()
+        }
+    ).then(res => {
+        console.log(res)
+    })
+
+
     const vnode = {
         type: MyComponent,
         props: {
