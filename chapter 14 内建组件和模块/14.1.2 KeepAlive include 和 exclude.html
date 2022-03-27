@@ -5,7 +5,7 @@
     <meta name="viewport"
           content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>13.1.1 KeepAlive include 和 exclude</title>
+    <title>13.1.1 KeepAlive 的 include 和 exclude</title>
     <script src="https://unpkg.com/@vue/reactivity@3.0.5/dist/reactivity.global.js"></script>
 </head>
 <body>
@@ -797,12 +797,8 @@
     const cache = new Map()
     const KeepAlive = {
         __isKeepAlive: true,
-        props: {
-            include: RegExp,
-            exclude: RegExp
-        },
         setup(props, { slots }) {
-            console.log({ props })
+
             // 当前 KeepAlive 组件的实例
             const instance = currentInstance
             // keepAlive 组件存在特殊的 KeepAliveCtx 对象，会暴露渲染器的一些内部方法
@@ -827,21 +823,7 @@
                 if (typeof rawVNode.type !== 'object') {
                     return rawVNode
                 }
-                // 获取被 KeepAlive 的组件的 name
-                const name = rawVNode.type.name
-                // 对 name 进行匹配
-                if (
-                    name &&
-                    (
-                        // 如果 name 无法和 include 匹配
-                        (props.include && !props.include.test(name)) ||
-                        // 或者被 eclude 匹配
-                        (props.exclude && props.exclude.test(name))
-                    )
-                ) {
-                    // 如果上述条件成立，就直接挂载内部组件，不进行属于 KeepAlive 的后续操作
-                    return rawVNode
-                }
+
                 // 在挂载时先获取缓存的组件
                 const cachedVNode = cache.get(rawVNode.type)
                 if (cachedVNode) {
@@ -865,9 +847,6 @@
 
     const vnode = {
         type: KeepAlive,
-        props:{
-            exclude: /^My/
-        },
         children: {
             default() {
                 return { type: MyComponent}
