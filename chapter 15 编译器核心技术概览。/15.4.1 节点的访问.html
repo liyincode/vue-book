@@ -163,7 +163,52 @@
 
   const ast = parse(`<div><p>Vue</p><p>Template</p></div>`)
 
-  console.log(ast)
+  function transform(ast) {
+      traverseNode(ast)
+      console.log(dump(ast))
+  }
+
+  function traverseNode(ast) {
+      const currentNode = ast
+
+      if (currentNode.type === 'Element' && currentNode.tag === 'p') {
+          currentNode.tag = 'h1'
+      }
+
+      const children = currentNode.children
+      if (children) {
+          for (let i = 0; i < children.length; i++) {
+              traverseNode(children[i])
+          }
+      }
+  }
+
+  transform(ast)
+
+  /**
+   * Root:
+   * --Element: div
+   * ----Element: p
+   * ------Text: Vue
+   * ----Element: p
+   * ------Text: Template
+   * @param node
+   * @param indent
+   */
+  function dump(node, indent = 0) {
+      const type = node.type
+      const desc = node.type === 'Root'
+        ? ''
+        : node.type === 'Element'
+              ? node.tag
+              : node.content
+
+      console.log(`${'-'.repeat(indent)}${type}: ${desc}`)
+
+      if (node.children) {
+          node.children.forEach(n => dump(n, indent + 2))
+      }
+  }
 
 </script>
 </html>
