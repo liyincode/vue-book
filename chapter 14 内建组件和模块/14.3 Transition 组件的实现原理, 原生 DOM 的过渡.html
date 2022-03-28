@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>14.3 Transition 组件的实现原理, 原生 DOM 的过渡</title>
+</head>
+<style>
+    .box{
+        width: 100px;
+        height: 100px;
+        background-color: red;
+    }
+    /*初始状态，距离左边 200px*/
+    .enter-from {
+        transform: translateX(200px);
+    }
+    /*结束状态，距离左边 0px*/
+    .enter-to {
+        transform: translateX(0);
+    }
+    /*过渡过程，运动过程*/
+    .enter-active {
+        transition: transform 1s ease-in-out;
+    }
+</style>
+<body>
+<!--<div class="box"></div>-->
+
+<script>
+    const el = document.createElement('div')
+    el.classList.add('box')
+
+    el.classList.add('enter-from') // 初始状态
+    el.classList.add('enter-active') // 运动过程
+
+    document.body.appendChild(el)
+
+    // 元素开始运动
+    // 无法按照预期运动，因为浏览器会在当前帧绘制 DOM 元素，我们需要在下一帧绘制
+    // el.classList.remove('enter-from')
+    // el.classList.add('enter-to')
+
+
+
+    el.addEventListener('click', () => {
+       const performRemove = () => el.parentNode.removeChild(el)
+
+        // 设置初始状态
+        el.classList.add('leave-from')
+        el.classList.add('leave-active')
+
+        // 强制 reflow：使初始状态生效
+        document.body.offsetHeight
+
+        // 在下一帧切换元素的状态
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                el.classList.remove('enter-from')
+                el.classList.add('enter-to')
+
+                // 监听 transitionend 事件完成收尾工作
+                el.addEventListener('transitionend', () => {
+                    el.classList.remove('enter-to')
+                    el.classList.remove('enter-active')
+
+                    // 当过渡完成后，调用函数将 DOM 元素移除
+                    performRemove()
+                })
+            })
+        })
+    })
+
+</script>
+</body>
+</html>
