@@ -164,22 +164,41 @@
   const ast = parse(`<div><p>Vue</p><p>Template</p></div>`)
 
   function transform(ast) {
-      traverseNode(ast)
+      const context = {
+          nodeTransforms: [
+              transformElement, // 用来转化标签节点
+              transformText // 用来转化文本节点
+          ]
+      }
+      traverseNode(ast, context)
       console.log(dump(ast))
   }
 
-  function traverseNode(ast) {
+  function traverseNode(ast, context) {
       const currentNode = ast
 
-      if (currentNode.type === 'Element' && currentNode.tag === 'p') {
-          currentNode.tag = 'h1'
+      const transforms = context.nodeTransforms
+      for (let i = 0; i < transforms.length; i++) {
+          transforms[i](currentNode, context)
       }
 
       const children = currentNode.children
       if (children) {
           for (let i = 0; i < children.length; i++) {
-              traverseNode(children[i])
+              traverseNode(children[i], context)
           }
+      }
+  }
+
+  function transformElement(node) {
+      if (node.type === 'Element' && node.tag === 'p') {
+          node.tag = 'h1'
+      }
+  }
+
+  function transformText(node) {
+      if (node.type === 'Text') {
+          node.content = node.content.repeat(2)
       }
   }
 
