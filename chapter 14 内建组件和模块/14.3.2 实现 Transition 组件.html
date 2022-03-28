@@ -8,6 +8,22 @@
     <title>14.3.2 实现 Transition 组件.html</title>
     <script src="https://unpkg.com/@vue/reactivity@3.0.5/dist/reactivity.global.js"></script>
 </head>
+<style>
+    .box {
+        width: 100px;
+        height: 100px;
+        background-color: red;
+    }
+    .enter-active, .leave-active {
+        transition: transform 1s ease-in-out;
+    }
+    .enter-from, .leave-to {
+        transform: translateX(200px);
+    }
+    .enter-to, .leave-from {
+        transform: translateX(0);
+    }
+</style>
 <body>
 <div id="app"></div>
 </body>
@@ -64,7 +80,17 @@
                 }
             }
 
+            // 判断一个 VNode 是否要需要过渡
+            const needTransition = vnode.transition
+            if (needTransition) {
+                vnode.transition.beforeEnter(el)
+            }
+
             insert(el, container, anchor)
+
+            if (needTransition) {
+                vnode.transition.enter(el)
+            }
         }
 
         function patch(n1, n2, container, anchor) {
@@ -351,7 +377,6 @@
             }
         }
 
-
         function resolveProps(options, propsData) {
             const props = {}
             const attrs = {}
@@ -368,7 +393,6 @@
             }
             return [props, attrs]
         }
-
 
         function patchElement(n1, n2) {
             const el = n2.el = n1.el
@@ -575,6 +599,8 @@
 
     function unmount(vnode) {
         console.log('unmount vnode', vnode)
+        // 判断 vnode 是否需要过渡
+        const needTransition = vnode.transition
         if (vnode.type === 'Fragment') {
             vnode.children.forEach(c => unmount(c))
         } else if (typeof vnode.type === 'object') {
@@ -588,8 +614,13 @@
             return
         }
         const parent = vnode.el.parentNode
+        const performRemove = () => parent.removeChild(vnode.el)
         if (parent) {
-            parent.removeChild(vnode.el)
+            if (needTransition) {
+                vnode.transition.leave(vnode.el, performRemove)
+            } else {
+                performRemove()
+            }
         }
     }
 
@@ -863,7 +894,83 @@
         }
     }
 
+    const Transition = {
+        name: 'Transition',
+        setup(props, { slots }) {
+            return () => {
+                // 获取需要过渡的元素
+                const innerVNode = slots.default()
 
+                // 添加钩子函数
+                innerVNode.transition = {
+                    beforeEnter(el) {
+                        el.classList.add('enter-from')
+                        el.classList.add('enter-active')
+                    },
+                    enter(el) {
+                        requestAnimationFrame(() => {
+                            requestAnimationFrame(() => {
+                                el.classList.remove('enter-from')
+                                el.classList.add('enter-to')
+
+                                el.addEventListener('transitionend', () => {
+                                    el.classList.remove('enter-to')
+                                    el.classList.remove('enter-active')
+                                })
+                            })
+                        })
+
+                    },
+                    leave(el, performRemove) {
+                        el.classList.add('leave-from')
+                        el.classList.add('leave-active')
+
+                        document.body.offsetHeight
+
+                        requestAnimationFrame(() => {
+                            requestAnimationFrame(() => {
+                                el.classList.remove('leave-from')
+                                el.classList.add('leave-to')
+
+                                el.addEventListener('transitionend', () => {
+                                    el.classList.remove('enter-to')
+                                    el.classList.remove('enter-active')
+
+                                    performRemove()
+                                })
+                            })
+                        })
+                    }
+                }
+
+                return innerVNode
+            }
+        }
+    }
+
+
+    const App = {
+        name: 'App',
+        setup() {
+            const toggle = ref(true)
+
+            setTimeout(() => {
+                toggle.value = false
+            }, 2000);
+
+            return () => {
+                return {
+                    type: Transition,
+                    children: {
+                        default() {
+                            return toggle.value ? { type: 'div', props: { class: 'box' } } : { type: Text, children: '' }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    renderer.render({ type: App }, document.querySelector('#app'))
 
 </script>
 </html>
