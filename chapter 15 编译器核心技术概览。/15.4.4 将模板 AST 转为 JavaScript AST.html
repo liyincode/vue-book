@@ -184,6 +184,7 @@
               }
           },
           nodeTransforms: [
+              transformRoot,
               transformElement, // 用来转化标签节点
               transformText // 用来转化文本节点
           ]
@@ -223,16 +224,59 @@
       }
   }
 
-  function transformElement(node) {
+  function transformRoot(node) {
+      return () => {
+          if (node.type !== 'Root') {
+              return
+          }
 
+          const vnodeJSAST = node.children[0].jsNode
+          node.jsNode = {
+              type: 'FunctionDecl',
+              id: { type: 'Identifier', name: 'render' },
+              params: [],
+              body: [
+                  {
+                      type: 'ReturnStatement',
+                      return: vnodeJSAST
+                  }
+              ]
+          }
+      }
+  }
+
+  function transformElement(node) {
+      // 将转换代码编写在退出的阶段的回调函数中，保证该标签节点的子节点全部被处理完毕
+      return () => {
+          if (node.type !== 'Element') {
+              return
+          }
+
+          // 1. 创建 h 函数调用语句
+          // h 函数调用的第一个参数是标签名称
+          const callExp = createCallExpression('h', [
+              createStringLiteral(node.tag)
+          ])
+          // 2. 处理 h 函数调用的参数
+          node.children.length === 1
+              // 如果当前标签只有一个子节点，则直接使用子节点的 jsNode 作为参数
+            ? callExp.arguments.push(node.children[0].jsNode)
+              // 如果当前标签节点有多个子节点，则创建一个 ArrayExpression 节点作为参数
+            : callExp.arguments.push(
+                createArrayExpression(node.children.map(c => c.jsNode))
+              )
+
+          // 3. 将当前标签节点对应的 JavaScript AST 添加到 jsNode 属性下
+          node.jsNode = callExp
+      }
   }
 
   function transformText(node, context) {
-      console.log(`进入：${JSON.stringify(node)}`)
-
-      return () => {
-          console.log(`退出：${JSON.stringify(node)}`)
+      if (node.type !== 'Text') {
+          return
       }
+
+      node.jsNode = createStringLiteral(node.content)
   }
 
 
@@ -265,6 +309,122 @@
   console.log(ast)
   transform(ast)
 
+  // =============================== AST 工具函数 ===============================
+
+  function createStringLiteral(value) {
+      return {
+          type: 'StringLiteral',
+          value
+      }
+  }
+
+  function createIdentifier(name) {
+      return {
+          type: 'Identifier',
+          name
+      }
+  }
+
+  function createArrayExpression(elements) {
+      return {
+          type: 'ArrayExpression',
+          elements
+      }
+  }
+
+  function createCallExpression(callee, arguments) {
+      return {
+          type: 'CallExpression',
+          callee: createIdentifier(callee),
+          arguments
+      }
+  }
+
+  // =============================== AST 工具函数 ===============================
+
+  // function render() {
+  //     return h('div', [
+  //         h('p', 'vue'),
+  //         h('p', 'Template')
+  //     ])
+  // }
+  // const FunctionDeclNode = {
+  //     type: 'FunctionDecl', // 代表该节点是函数声明
+  //     // 函数的名称是一个标识符，标识符本身也是一个节点
+  //     id: {
+  //         type: 'Identifier',
+  //         name: 'render' // 标识符名称，在这里就是渲染函数的名称 render
+  //     },
+  //     params: [], // 参数
+  //     // 函数的函数体只有一个语句，即 return 语句
+  //     body: [
+  //         {
+  //             type: 'ReturnStatement',
+  //             return: null
+  //         }
+  //     ]
+  // }
+
+  // 渲染函数的返回值
+  // const CallExp = {
+  //     type: 'CallExpression',
+  //     // 被调用函数的名称，它是一个标识符
+  //     callee: {
+  //         type: 'Identifier',
+  //         name: 'h'
+  //     },
+  //     // 参数
+  //     arguments: []
+  // }
+
+  // const Str = {
+  //     type: 'StringLiteral',
+  //     value: 'div'
+  // }
+
+  // const Arr = {
+  //     type: 'ArrayExpression',
+  //     // 数组中的元素
+  //     elements: []
+  // }
+
+  // 目标转换 javascript AST
+  // const FunctionDeclNode = {
+  //     type: 'FunctionDecl',
+  //     id: {
+  //         type: 'Identifier',
+  //         name: 'render'
+  //     },
+  //     params: [],
+  //     body: [
+  //         {
+  //             type: 'ReturnStatement',
+  //             return: {
+  //                 type: 'CallExpression',
+  //                 callee: { type: 'Identifier', name: 'h'},
+  //                 arguments: [
+  //                     {
+  //                         type: 'StringLiteral',
+  //                         value: 'div'
+  //                     },
+  //                     {
+  //                         type: 'ArrayExpression',
+  //                         elements: [
+  //                             {
+  //                                 type: 'CallExpression',
+  //                                 callee: { type: 'Identifier', name: 'h' },
+  //                                 arguments: [
+  //                                     { type: 'StringLiteral', value: 'p'},
+  //                                     { type: 'StringLiteral', value: 'Template'}
+  //                                 ]
+  //                             }
+  //                         ]
+  //                     }
+  //                 ]
+  //             }
+  //         }
+  //     ]
+  // }
 
 </script>
 </html>
