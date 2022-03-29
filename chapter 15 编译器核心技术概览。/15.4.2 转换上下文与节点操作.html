@@ -171,6 +171,20 @@
           childIndex: 0,
           // 当前转换节点的父节点
           parent: null,
+          // 替换节点
+          replaceNode(node) {
+              // 替换为新节点
+              context.parent.children[context.childIndex] = node
+              // currentNode 更新为新节点
+              context.currentNode = node
+          },
+          // 删除当前节点
+          removeNode() {
+              if (context.parent) {
+                  context.parent.children.splice(context.childIndex, 1)
+                  context.currentNode = null
+              }
+          },
           nodeTransforms: [
               transformElement, // 用来转化标签节点
               transformText // 用来转化文本节点
@@ -187,6 +201,8 @@
       const transforms = context.nodeTransforms
       for (let i = 0; i < transforms.length; i++) {
           transforms[i](context.currentNode, context)
+          // 如果转换函数移除了当前节点，都应该检查当前节点是否已经被移除，如果移除了，就直接返回
+          if (!context.currentNode) return
       }
 
       const children = context.currentNode.children
@@ -205,9 +221,9 @@
       }
   }
 
-  function transformText(node) {
+  function transformText(node, context) {
       if (node.type === 'Text') {
-          node.content = node.content.repeat(2)
+          context.removeNode()
       }
   }
 
