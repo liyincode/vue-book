@@ -161,8 +161,6 @@
       return root
   }
 
-  const ast = parse(`<div><p>Vue</p><p>Template</p></div>`)
-
   function transform(ast) {
       const context = {
           // 当前正在转换的节点
@@ -195,13 +193,17 @@
   }
 
   function traverseNode(ast, context) {
-      console.log(JSON.parse(JSON.stringify(context)))
       context.currentNode = ast
+      // 增加退出阶段的回调函数数组
+      const exitFns = []
 
       const transforms = context.nodeTransforms
       for (let i = 0; i < transforms.length; i++) {
-
-          transforms[i](context.currentNode, context)
+          // 将退出阶段的回调函数添加到 exitFns 数组中
+          const onExit = transforms[i](context.currentNode, context)
+          if (onExit) {
+              exitFns.push(onExit)
+          }
           // 如果转换函数移除了当前节点，都应该检查当前节点是否已经被移除，如果移除了，就直接返回
           if (!context.currentNode) return
       }
@@ -214,21 +216,26 @@
               traverseNode(children[i], context)
           }
       }
+
+      // 反序执行缓存到 exitFns 中的回调函数
+      let i = exitFns.length
+      while (i--) {
+          exitFns[i]()
+      }
   }
 
   function transformElement(node) {
-      if (node.type === 'Element' && node.tag === 'p') {
-          node.tag = 'h1'
-      }
+
   }
 
   function transformText(node, context) {
-      if (node.type === 'Text') {
-          context.removeNode()
+      console.log(`进入：${JSON.stringify(node)}`)
+
+      return () => {
+          console.log(`退出：${JSON.stringify(node)}`)
       }
   }
 
-  transform(ast)
 
   /**
    * Root:
@@ -254,6 +261,11 @@
           node.children.forEach(n => dump(n, indent + 2))
       }
   }
+
+  const ast = parse(`<div><p>Vue</p><p>Template</p></div>`)
+  console.log(ast)
+  transform(ast)
+
 
 </script>
 </html>
