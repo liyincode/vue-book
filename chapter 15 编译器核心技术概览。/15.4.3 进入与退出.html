@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>15.4.3 进入与退出</title>
+</head>
+<body>
+
+</body>
+<script>
+  // 定义状态机的状态
+  const State = {
+    initial: 1, // 初始状态
+    tagOpen: 2, // 标签开始状态
+    tagName: 3, // 标签名称状态
+    text: 4, // 文本状态
+    tagEnd: 5, // 结束标签状态
+    tagEndName: 6 // 结束标签名称状态
+  }
+
+  // 判断是否是字母
+  function isAlpha(char) {
+    return char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z'
+  }
+
+  function tokenzie(str) {
+    let currentState = State.initial
+    // 缓存字符
+    const chars = []
+    // 生成的 Token
+    const tokens = []
+
+    while (str) {
+      const char = str[0]
+      switch (currentState) {
+        case State.initial:
+          if (char === '<') {
+            currentState = State.tagOpen
+            str = str.slice(1)
+          } else if (isAlpha(char)) {
+            currentState = State.text
+            chars.push(char)
+            str = str.slice(1)
+          }
+          break
+
+        case State.tagOpen:
+          if (isAlpha(char)) {
+            currentState = State.tagName
+            chars.push(char)
+            str = str.slice(1)
+          } else if (char === '/') {
+            currentState = State.tagEnd
+            str = str.slice(1)
+          }
+          break
+
+        case State.tagName:
+          if (isAlpha(char)) {
+            chars.push(char)
+            str = str.slice(1)
+          } else if (char === '>') {
+            // 1. 遇到字符 > ,切换到初始状态
+            currentState = State.initial
+            // 2. 创建一个 Token
+            tokens.push({
+              type: 'tag',
+              name: chars.join('')
+            })
+            // 3. chars 数组的内容已被消费，清空它
+            chars.length = 0
+            // 4. 同时消费当前字符 >
+            str = str.slice(1)
+          }
+          break
+
+        case State.text:
+          if (isAlpha(char)) {
+            chars.push(char)
+            str = str.slice(1)
+          } else if (char === '<') {
+            currentState = State.tagOpen
+            tokens.push({
+              type: 'text',
+              content: chars.join('')
+            })
+            chars.length = 0
+            str = str.slice(1)
+          }
+        break
+
+        case State.tagEnd:
+          if (isAlpha(char)) {
+            currentState = State.tagEndName
+            chars.push(char)
+            str = str.slice(1)
+          }
+          break
+
+        case State.tagEndName:
+          if (isAlpha(char)) {
+            chars.push(char)
+            str = str.slice(1)
+          } else if (char === '>') {
+            currentState = State.initial
+            tokens.push({
+              type: 'tagEnd',
+              name: chars.join('')
+            })
+            chars.length = 0
+            str = str.slice(1)
+          }
+          break
+      }
+    }
+
+    return tokens
+  }
+
+  function parse(str) {
+      const tokens = tokenzie(str)
+      // 创建 Root 根节点
+      const root = {
+          type: 'Root',
+          children: []
+      }
+
+      const elementStack = [root]
+
+      while (tokens.length) {
+          // 获取当前栈顶节点作为父节点 parent
+          const parent = elementStack[elementStack.length - 1]
+          const t = tokens[0]
+          switch (t.type) {
+              case 'tag':
+                  const elementNode = {
+                      type: 'Element',
+                      tag: t.name,
+                      children: []
+                  }
+                  parent.children.push(elementNode)
+                  elementStack.push(elementNode)
+                  break
+
+              case 'text':
+                  const textNode = {
+                      type: 'Text',
+                      content: t.content
+                  }
+                  parent.children.push(textNode)
+                  break
+
+              case 'tagEnd':
+                  elementStack.pop()
+                  break
+          }
+
+          tokens.shift()
+      }
+
+      return root
+  }
+
+  const ast = parse(`<div><p>Vue</p><p>Template</p></div>`)
+
+  function transform(ast) {
+      const context = {
+          // 当前正在转换的节点
+          currentNode: null,
+          // 当前节点在父节点的 children 中的位置索引
+          childIndex: 0,
+          // 当前转换节点的父节点
+          parent: null,
+          // 替换节点
+          replaceNode(node) {
+              // 替换为新节点
+              context.parent.children[context.childIndex] = node
+              // currentNode 更新为新节点
+              context.currentNode = node
+          },
+          // 删除当前节点
+          removeNode() {
+              if (context.parent) {
+                  context.parent.children.splice(context.childIndex, 1)
+                  context.currentNode = null
+              }
+          },
+          nodeTransforms: [
+              transformElement, // 用来转化标签节点
+              transformText // 用来转化文本节点
+          ]
+      }
+      traverseNode(ast, context)
+      console.log(dump(ast))
+  }
+
+  function traverseNode(ast, context) {
+      console.log(JSON.parse(JSON.stringify(context)))
+      context.currentNode = ast
+
+      const transforms = context.nodeTransforms
+      for (let i = 0; i < transforms.length; i++) {
+
+          transforms[i](context.currentNode, context)
+          // 如果转换函数移除了当前节点，都应该检查当前节点是否已经被移除，如果移除了，就直接返回
+          if (!context.currentNode) return
+      }
+
+      const children = context.currentNode.children
+      if (children) {
+          for (let i = 0; i < children.length; i++) {
+              context.parent = context.currentNode
+              context.childIndex = i
+              traverseNode(children[i], context)
+          }
+      }
+  }
+
+  function transformElement(node) {
+      if (node.type === 'Element' && node.tag === 'p') {
+          node.tag = 'h1'
+      }
+  }
+
+  function transformText(node, context) {
+      if (node.type === 'Text') {
+          context.removeNode()
+      }
+  }
+
+  transform(ast)
+
+  /**
+   * Root:
+   * --Element: div
+   * ----Element: p
+   * ------Text: Vue
+   * ----Element: p
+   * ------Text: Template
+   * @param node
+   * @param indent
+   */
+  function dump(node, indent = 0) {
+      const type = node.type
+      const desc = node.type === 'Root'
+        ? ''
+        : node.type === 'Element'
+              ? node.tag
+              : node.content
+
+      console.log(`${'-'.repeat(indent)}${type}: ${desc}`)
+
+      if (node.children) {
+          node.children.forEach(n => dump(n, indent + 2))
+      }
+  }
+
+</script>
+</html>
