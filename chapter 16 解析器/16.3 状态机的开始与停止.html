@@ -62,7 +62,9 @@
                             node = parseCDATA(context, ancestors)
                         }
                     } else if (source[1] === '/') {
-
+                        // 状态机遭遇了闭合标签，抛出错误，它缺少与之对应的开始标签
+                        console.error('无效的结束标签')
+                        continue
                     } else if (/[a-z]/i.test(source[1])) {
                         // 标签
                         node = parseElement(context, ancestors)
