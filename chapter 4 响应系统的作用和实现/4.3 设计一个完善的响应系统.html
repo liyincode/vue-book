@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>4.3 设计一个完善的响应系统</title>
+</head>
+<body>
+
+</body>
+
+<script>
+    /*
+    1. 副作用函数不能直接硬编码进去，而是可以扩展出来
+    2. 匿名函数也可以作为副作用函数收集进去
+     */
+
+  // 存储副作用的桶
+  const bucket = new Set();
+
+  // 一个全局变量存储被注册的副作用函数
+    let activeEffect;
+    // 用于注册副作用函数
+    function effect(fn) {
+        // 将副作用函数赋值给全局变量
+        activeEffect = fn;
+        // 执行副作用函数
+        fn();
+    }
+
+  // 原始数据
+  const data = { text: 'hello world' };
+
+  // 对原始数据的代理
+  const obj = new Proxy(data, {
+    // 读取
+    get(target, key) {
+      // 将副作用函数添加到存储副作用的桶中
+        if (activeEffect) {
+            bucket.add(activeEffect);
+        }
+
+      return target[key];
+    },
+
+    // 拦截
+    set(target, key, newValue) {
+      target[key] = newValue;
+
+      // 将副作用函数从桶里取出并执行
+      bucket.forEach(fn => fn());
+
+      return true;
+    }
+  })
+
+
+  effect(
+      // 一个匿名的副作用函数
+      () => {
+        document.body.innerHTML = obj.text;
+      }
+    )
+
+  setTimeout(() => {
+    obj.text = 'hello vue3'
+  }, 3000)
+</script>
+
+</html>
