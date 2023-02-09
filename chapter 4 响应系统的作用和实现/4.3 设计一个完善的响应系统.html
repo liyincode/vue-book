@@ -27,9 +27,16 @@
                              (Map)|   (Set)|-> effectFn1
                                   |-----> key2
                                       (Set)|-> effectFn1
+
+       4. 将依赖收集和依赖执行封装成函数提取出来
      */
 
   // 存储副作用的桶
+    /*
+    为什么使用 WeakMap，而不是用 Map
+    因为当 WeakMap 的 key，也就是原始数据 target 不被引用，不再使用后，gc 清空 target 后，WeakMap 中 target 所对应的值也会被清空
+    而 Map 中 target 所对应的值会一直存在，这样会导致内存溢出
+     */
   const bucket = new WeakMap();
 
   // 一个全局变量存储被注册的副作用函数
@@ -50,20 +57,8 @@
     // 读取
     get(target, key) {
         if (!activeEffect) return target[key];
-        // 从桶中拿到原始对象对应的对象的 key 与依赖这个 key 的函数集合
-        let depsMap = bucket.get(target);
-        // 如果不存在，就建一个与 target 关联
-        if (!depsMap) {
-            bucket.set(target, (depsMap = new Map()));
-        }
-        // 拿出 对象的 key 与所对应的副作用函数的集合
-        let deps = depsMap.get(key);
-        // 如果不存在，就建一个与当前所读取的这个对象的 key 关联
-        if (!deps) {
-            depsMap.set(key, (deps = new Set()));
-        }
-        // 将副作用函数添加到集合中
-        deps.add(activeEffect);
+
+        track(target, key);
 
         return target[key];
     },
@@ -71,16 +66,34 @@
     // 拦截
     set(target, key, newValue) {
         target[key] = newValue;
-      const depsMap = bucket.get(target);
-      if (!depsMap) return;
-      const deps = depsMap.get(key);
 
-      deps && deps.forEach(fn => fn());
+        trigger(target, key)
 
       return true;
     }
   })
 
+    function track(target, key) {
+        let depsMap = bucket.get(target);
+        if (!depsMap) {
+            bucket.set(target, (depsMap = new Map()));
+        }
+
+        let deps = depsMap.get(key);
+        if (!deps) {
+            depsMap.set(key, (deps = new Set()));
+        }
+
+        deps.add(activeEffect);
+    }
+
+    function trigger(target, key) {
+        const depsMap = bucket.get(target);
+        if (!depsMap) return;
+        const deps = depsMap.get(key);
+
+        deps && deps.forEach(fn => fn());
+    }
 
   effect(
       // 一个匿名的副作用函数
