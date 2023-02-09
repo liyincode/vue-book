@@ -12,10 +12,25 @@
     /*
     1. 副作用函数不能直接硬编码进去，而是可以扩展出来
     2. 匿名函数也可以作为副作用函数收集进去
+    3. 数据的指定字段与对应的副作用函数产生联系
+                       |-----> target1
+                       |         |-----> key1
+                       |         |        |-> effectFn1
+                       |    (Map)|   (Set)|-> effectFn2
+   bucket---> (WeakMap)|         |        |-> effectFn3
+                       |         |-----> key2
+                       |                  |-> effectFn1
+                       |             (Set)|-> effectFn2
+                       |                  |-> effectFn3
+                       |------> target2
+                                  |-----> key1
+                             (Map)|   (Set)|-> effectFn1
+                                  |-----> key2
+                                      (Set)|-> effectFn1
      */
 
   // 存储副作用的桶
-  const bucket = new Set();
+  const bucket = new WeakMap();
 
   // 一个全局变量存储被注册的副作用函数
     let activeEffect;
@@ -34,20 +49,33 @@
   const obj = new Proxy(data, {
     // 读取
     get(target, key) {
-      // 将副作用函数添加到存储副作用的桶中
-        if (activeEffect) {
-            bucket.add(activeEffect);
+        if (!activeEffect) return target[key];
+        // 从桶中拿到原始对象对应的对象的 key 与依赖这个 key 的函数集合
+        let depsMap = bucket.get(target);
+        // 如果不存在，就建一个与 target 关联
+        if (!depsMap) {
+            bucket.set(target, (depsMap = new Map()));
         }
+        // 拿出 对象的 key 与所对应的副作用函数的集合
+        let deps = depsMap.get(key);
+        // 如果不存在，就建一个与当前所读取的这个对象的 key 关联
+        if (!deps) {
+            depsMap.set(key, (deps = new Set()));
+        }
+        // 将副作用函数添加到集合中
+        deps.add(activeEffect);
 
-      return target[key];
+        return target[key];
     },
 
     // 拦截
     set(target, key, newValue) {
-      target[key] = newValue;
+        target[key] = newValue;
+      const depsMap = bucket.get(target);
+      if (!depsMap) return;
+      const deps = depsMap.get(key);
 
-      // 将副作用函数从桶里取出并执行
-      bucket.forEach(fn => fn());
+      deps && deps.forEach(fn => fn());
 
       return true;
     }
