@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>4.5 嵌套的 effect 和 effect 栈</title>
+</head>
+<body>
+</body>
+
+<script>
+  /*
+  1. 当前程序无法满足嵌套的 effect 依赖收集
+   */
+  const data = { foo: true, bar: true };
+
+  const bucket = new WeakMap();
+
+  let activeEffect;
+
+  function effect(fn) {
+    const effectFn = () => {
+      cleanup(effectFn);
+      activeEffect = effectFn;
+      console.log('fn()', fn.name)
+      fn();
+    }
+
+    effectFn.deps = [];
+    effectFn();
+  }
+
+  function cleanup(effectFn) {
+    for (let i = 0; i < effectFn.deps.length; i++) {
+      const deps = effectFn.deps[i];
+      deps.delete(effectFn);
+    }
+
+    effectFn.deps.length = 0;
+  }
+
+  const obj = new Proxy(data, {
+    get(target, key) {
+      if (!activeEffect) return target[key];
+
+      track(target, key);
+
+      return target[key];
+    },
+
+    set(target, key, newValue) {
+      target[key] = newValue;
+
+      trigger(target, key)
+
+      return true;
+    }
+  })
+
+  function track(target, key) {
+    console.log('track', target, key)
+    let depsMap = bucket.get(target);
+    if (!depsMap) {
+      bucket.set(target, (depsMap = new Map()));
+    }
+
+    let deps = depsMap.get(key);
+    if (!deps) {
+      depsMap.set(key, (deps = new Set()));
+    }
+
+    deps.add(activeEffect);
+
+    activeEffect.deps.push(deps);
+  }
+
+  function trigger(target, key) {
+    console.log('trigger ', target, key)
+    const depsMap = bucket.get(target);
+    if (!depsMap) return;
+    const effects = depsMap.get(key);
+
+    const effectsToRun = new Set(effects);
+    effectsToRun.forEach(fn => console.log('fn.name', fn.name))
+    effectsToRun.forEach(effectFn => effectFn());
+  }
+
+  let temp1, temp2;
+  /*
+    先执行 effectFn1，后执行 effectFn2, 当 effectFn2 执行完之后，执行 temp1 = obj.foo 这一步
+    才触发了 obj 的 track 方法，然后执行 track 方法，但 activeEffect 变量已经被覆盖成 obj.bar 的副作用函数了，
+    这时 deps.add(activeEffect) 本来应该放入 obj.foo 的副作用函数 effectFn1，但结果放了 obj.bar 的副作用函数
+    依赖集合强行变成了 foo -> effectFn2
+
+    所以当 obj.foo = false，案例来说会触发 effectFn1，但触发了相关联的 effectFn2
+   */
+  effect(
+          function effectFn1() {
+            console.log('effectFn1 触发');
+
+            effect(
+                    function effectFn2() {
+                      console.log('effectFn2 触发');
+                      temp2 = obj.bar;
+                    }
+            )
+
+
+            temp1 = obj.foo;
+          }
+  )
+
+  console.log('---------------')
+
+  obj.foo = false;
+
+</script>
+
+</html>
