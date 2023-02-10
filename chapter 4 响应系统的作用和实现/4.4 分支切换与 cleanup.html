@@ -10,6 +10,7 @@
 <script>
   /*
    1. 产生了没必要的副作用函数的触发
+   2. effectFn 每次执行前删除所关联的依赖集合，执行后在正确收集一次依赖
    */
   const data = { ok: true, text: 'hello world' };
 
@@ -18,8 +19,25 @@
   let activeEffect;
 
   function effect(fn) {
-    activeEffect = fn;
-    fn();
+    const effectFn = () => {
+      cleanup(effectFn);
+      // 当 effectFn 执行时，将 effectFn 设置为当前激活的副作用函数
+      activeEffect = effectFn;
+      fn();
+    }
+
+    // activeEffect.deps 用来存储所有与该副作用函数相关联的依赖集合
+    effectFn.deps = [];
+    effectFn();
+  }
+
+  function cleanup(effectFn) {
+    for (let i = 0; i < effectFn.deps.length; i++) {
+      const deps = effectFn.deps[i];
+      deps.delete(effectFn);
+    }
+
+    effectFn.deps.length = 0;
   }
 
   const obj = new Proxy(data, {
@@ -53,6 +71,9 @@
     }
 
     deps.add(activeEffect);
+
+    // 所有与当前副作用函数相关的依赖集合都添加进去
+    activeEffect.deps.push(deps);
   }
 
   function trigger(target, key) {
@@ -72,9 +93,13 @@
   )
 
   // 当 obj.ok = false，不管 obj.text 如何更改，都不应该触发副作用函数，因为副作用函数中的三元表达式已经说明了和 text 属性无关了
-  // 但这里 text 更改后有一次触发了副作用函数
   obj.ok = false;
+  // 但这里 text 更改后又一次触发了副作用函数
   obj.text = 'hello vue3'
+
+  // 当 obj.ok = false 后，按照常理来说，跟副作用函数有关的字段应该只有 obj.ok，依赖集合中只有 ok -> effectFn()，
+  // 和 text 没有任何关系，也没有与 text 相关的副作用函数
+  // ** 所以每次执行副作用函数 effectFn 前，先删除这个副作用函数和所有相关的字段之间的关系，然后执行副作用函数后再正确收集一遍 **
 </script>
 
 </html>
