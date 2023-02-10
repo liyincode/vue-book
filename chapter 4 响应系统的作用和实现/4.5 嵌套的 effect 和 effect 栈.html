@@ -10,19 +10,28 @@
 <script>
   /*
   1. 当前程序无法满足嵌套的 effect 依赖收集
+  2. 定义一个数组模拟栈，用来存储副作用函数，解决嵌套收集问题
+  (这里处理的重点类似 effect 嵌套了 effect 执行函数调用栈与 activeEffect 的问题，执行完函数里面的函数，activeEffect 就一直是里面的函数了)
    */
   const data = { foo: true, bar: true };
 
   const bucket = new WeakMap();
 
   let activeEffect;
+  const effectStack = [];
 
   function effect(fn) {
     const effectFn = () => {
       cleanup(effectFn);
+      // 每次执行，将副作用函数压入栈顶
+      effectStack.push(effectFn);
       activeEffect = effectFn;
-      console.log('fn()', fn.name)
+      // 执行副作用函数
       fn();
+      // 执行完之后，将栈顶副作用函数出栈
+      effectStack.pop();
+      // 将当前副作用函数还原为函数调用外层函数
+      activeEffect = effectStack[effectStack.length - 1]
     }
 
     effectFn.deps = [];
