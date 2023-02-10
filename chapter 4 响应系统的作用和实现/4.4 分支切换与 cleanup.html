@@ -11,6 +11,7 @@
   /*
    1. 产生了没必要的副作用函数的触发
    2. effectFn 每次执行前删除所关联的依赖集合，执行后在正确收集一次依赖
+   3. 解决无限循环问题（Set.forEach 时，过程中如果先 delete，后又 add 进去，就会导致 Set 一直 forEach）
    */
   const data = { ok: true, text: 'hello world' };
 
@@ -70,6 +71,7 @@
       depsMap.set(key, (deps = new Set()));
     }
 
+    // 删完之后又 add，导致在 trigger 中 forEach 无限执行
     deps.add(activeEffect);
 
     // 所有与当前副作用函数相关的依赖集合都添加进去
@@ -82,7 +84,12 @@
     if (!depsMap) return;
     const effects = depsMap.get(key);
 
-    effects && effects.forEach(fn => fn());
+    // 构造一个新 Set，与之前的 deps 毫无关系，解决无限循环问题，effectsToRun 中有几个就循环几次，不会多也不会少
+    const effectsToRun = new Set(effects);
+    effectsToRun.forEach(effectFn => effectFn());
+
+    // 导致无限循环问题
+    // effects && effects.forEach(fn => fn());
   }
 
   effect(
