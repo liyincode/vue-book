@@ -10,6 +10,7 @@
 <script>
   /*
   1. 无限递归调用
+  2. 如果当前 track 的副作用函数与当前 trigger 时的副作用函数相同，便不去调用执行
    */
   const data = { foo: 1 };
 
@@ -82,7 +83,13 @@
     if (!depsMap) return;
     const effects = depsMap.get(key);
 
-    const effectsToRun = new Set(effects);
+    const effectsToRun = new Set();
+    effects && effects.forEach(effectFn => {
+      // 如果 trigger 触发执行的副作用函数与当前正在执行的副作用函数相同，则不触发执行
+      if (effectFn !== activeEffect) {
+        effectsToRun.add(effectFn);
+      }
+    });
     effectsToRun.forEach(fn => console.log('fn.name', fn.name))
     effectsToRun.forEach(effectFn => effectFn());
   }
