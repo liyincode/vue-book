@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>4.6 避免无限递归循环</title>
+</head>
+<body>
+</body>
+
+<script>
+  /*
+  1. 无限递归调用
+   */
+  const data = { foo: 1 };
+
+  const bucket = new WeakMap();
+
+  let activeEffect;
+  const effectStack = [];
+
+  function effect(fn) {
+    const effectFn = () => {
+      cleanup(effectFn);
+      effectStack.push(effectFn);
+      activeEffect = effectFn;
+      fn();
+      effectStack.pop();
+      activeEffect = effectStack[effectStack.length - 1]
+    }
+
+    effectFn.deps = [];
+    effectFn();
+  }
+
+  function cleanup(effectFn) {
+    for (let i = 0; i < effectFn.deps.length; i++) {
+      const deps = effectFn.deps[i];
+      deps.delete(effectFn);
+    }
+
+    effectFn.deps.length = 0;
+  }
+
+  const obj = new Proxy(data, {
+    get(target, key) {
+      if (!activeEffect) return target[key];
+
+      track(target, key);
+
+      return target[key];
+    },
+
+    set(target, key, newValue) {
+      target[key] = newValue;
+
+      trigger(target, key)
+
+      return true;
+    }
+  })
+
+  function track(target, key) {
+    console.log('track', target, key)
+    let depsMap = bucket.get(target);
+    if (!depsMap) {
+      bucket.set(target, (depsMap = new Map()));
+    }
+
+    let deps = depsMap.get(key);
+    if (!deps) {
+      depsMap.set(key, (deps = new Set()));
+    }
+
+    deps.add(activeEffect);
+
+    activeEffect.deps.push(deps);
+  }
+
+  function trigger(target, key) {
+    console.log('trigger ', target, key)
+    const depsMap = bucket.get(target);
+    if (!depsMap) return;
+    const effects = depsMap.get(key);
+
+    const effectsToRun = new Set(effects);
+    effectsToRun.forEach(fn => console.log('fn.name', fn.name))
+    effectsToRun.forEach(effectFn => effectFn());
+  }
+
+  /*
+    既会读取 obj.foo 的值，又会设置 obj.foo 的值
+    当 读取 obj.foo 的值时，触发 track 函数，将副作用函数收集，然后 obj.foo 被 + 1 了，触发 trigger 函数，
+    又开始执行 effect 中的副作用函数，但上一步的副作用函数还没执行完，现在又开始执行，就会一直像上一步中重复
+    执行 track 和 trigger，执行副作用函数，导致无限递归调用
+   */
+
+  effect(
+          () => {
+            // obj.foo++
+            obj.foo = obj.foo + 1
+          }
+  )
+
+
+</script>
+
+</html>
