@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>4.9 watch 的实现原理</title>
+</head>
+<body>
+</body>
+
+<script>
+    const data = {foo: 1, bar: 2};
+
+    const bucket = new WeakMap();
+
+    let activeEffect;
+    const effectStack = [];
+
+    function effect(fn, options = {}) {
+        const effectFn = () => {
+            cleanup(effectFn);
+            effectStack.push(effectFn);
+            activeEffect = effectFn;
+            const res = fn();
+            effectStack.pop();
+            activeEffect = effectStack[effectStack.length - 1]
+            return res
+        }
+
+        effectFn.options = options
+        effectFn.deps = [];
+        if (!options.lazy) {
+            effectFn();
+        }
+        return effectFn
+    }
+
+    function cleanup(effectFn) {
+        for (let i = 0; i < effectFn.deps.length; i++) {
+            const deps = effectFn.deps[i];
+            deps.delete(effectFn);
+        }
+
+        effectFn.deps.length = 0;
+    }
+
+    const obj = new Proxy(data, {
+        get(target, key) {
+            if (!activeEffect) return target[key];
+
+            track(target, key);
+
+            return target[key];
+        },
+
+        set(target, key, newValue) {
+            target[key] = newValue;
+
+            trigger(target, key)
+
+            return true;
+        }
+    })
+
+    function track(target, key) {
+        console.log('track', target, key)
+        if (!activeEffect) return
+        let depsMap = bucket.get(target);
+        if (!depsMap) {
+            bucket.set(target, (depsMap = new Map()));
+        }
+
+        let deps = depsMap.get(key);
+        if (!deps) {
+            depsMap.set(key, (deps = new Set()));
+        }
+
+        deps.add(activeEffect);
+
+        activeEffect.deps.push(deps);
+    }
+
+    function trigger(target, key) {
+        console.log('trigger ', target, key)
+        const depsMap = bucket.get(target);
+        if (!depsMap) return;
+        const effects = depsMap.get(key);
+
+        const effectsToRun = new Set();
+        effects && effects.forEach(effectFn => {
+            if (effectFn !== activeEffect) {
+                effectsToRun.add(effectFn);
+            }
+        });
+        effectsToRun.forEach(fn => console.log('fn.name', fn.name))
+        effectsToRun.forEach(effectFn => {
+            if (effectFn.options.scheduler) {
+                effectFn.options.scheduler(effectFn)
+            } else {
+                effectFn()
+            }
+        });
+    }
+
+    function computed(getter) {
+        let value
+        let dirty = true
+        const effectFn = effect(getter,
+            {
+                lazy: true,
+                scheduler() {
+                    // 使用调度器，当依赖值变化后，将 dirty = true，就可以重新计算了
+                    dirty = true
+                    trigger(obj, 'value')
+                }
+            }
+        )
+        const obj = {
+            get value() {
+                if (dirty) {
+                    value = effectFn()
+                    dirty = false
+                }
+                track(obj, 'value')
+                return value
+            }
+        }
+
+        return obj
+    }
+
+    function watch(source, cb) {
+        effect(
+            () => traverse(source),
+            {
+                scheduler() {
+                    cb()
+                }
+            }
+        )
+    }
+
+    function traverse(value, seen = new Set()) {
+        // 如果要读取的数据是原始值，或者已经被读取过了，那么什么都不做
+        if (typeof value !== 'object' || value === null || seen.has(value)) return
+        // 将数据添加到 seen 中，代表遍历地读取过了，避免循环引用引起的死循环
+        seen.add(value)
+        // 暂时不考虑数组等其他结构
+        // 假设 value 就是一个对象，使用 for...in 读取对象的每一个值，并递归地调用 traverse 进行处理
+        for (const k in value) {
+            traverse(value[k], seen)
+        }
+
+        return value
+    }
+
+    watch(obj, () => {
+        console.log(11111)
+    })
+
+    obj.foo++
+    obj.foo++
+
+</script>
+
+</html>
