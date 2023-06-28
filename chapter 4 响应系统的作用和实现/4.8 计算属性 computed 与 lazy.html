@@ -110,7 +110,15 @@
         let value
         // 用来标志是否需要重新计算
         let dirty = true
-        const effectFn = effect(getter, { lazy: true })
+        const effectFn = effect(getter,
+            {
+                lazy: true,
+                scheduler() {
+                    // 使用调度器，当依赖值变化后，将 dirty = true，就可以重新计算了
+                    dirty = true
+                }
+            }
+        )
         const obj = {
             get value() {
                 if (dirty) {
@@ -135,8 +143,8 @@
     const sum = computed(() => obj.foo + obj.bar)
     console.log(sum.value)
     obj.foo++
+    // console.log(sum.value) 结果还是 3，是因为第一次计算完之后，dirty = false，虽然 obj.foo++ 了，但还是用了缓存结果
     console.log(sum.value)
-
 </script>
 
 </html>
