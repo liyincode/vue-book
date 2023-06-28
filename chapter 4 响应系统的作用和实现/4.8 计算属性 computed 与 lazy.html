@@ -106,12 +106,22 @@
     }
 
     function computed (getter) {
+        // 用来缓存上一次计算的值
+        let value
+        // 用来标志是否需要重新计算
+        let dirty = true
         const effectFn = effect(getter, { lazy: true })
-        return {
+        const obj = {
             get value() {
-                return effectFn()
+                if (dirty) {
+                    value = effectFn()
+                    dirty = false
+                }
+                return value
             }
         }
+
+        return obj
     }
 
     const effectFn = effect(
@@ -124,6 +134,9 @@
     )
     const sum = computed(() => obj.foo + obj.bar)
     console.log(sum.value)
+    obj.foo++
+    console.log(sum.value)
+
 </script>
 
 </html>
