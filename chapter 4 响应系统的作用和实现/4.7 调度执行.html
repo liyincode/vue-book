@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>4.7 调度执行</title>
+</head>
+<body>
+</body>
+
+<script>
+    /*
+    1.调度执行，意味着可以控制副作用函数执行的时机
+     */
+    const data = { foo: 1 };
+
+    const bucket = new WeakMap();
+
+    let activeEffect;
+    const effectStack = [];
+
+    function effect(fn, options = {}) {
+        const effectFn = () => {
+            cleanup(effectFn);
+            effectStack.push(effectFn);
+            activeEffect = effectFn;
+            fn();
+            effectStack.pop();
+            activeEffect = effectStack[effectStack.length - 1]
+        }
+
+        effectFn.options = options
+        effectFn.deps = [];
+        effectFn();
+    }
+
+    function cleanup(effectFn) {
+        for (let i = 0; i < effectFn.deps.length; i++) {
+            const deps = effectFn.deps[i];
+            deps.delete(effectFn);
+        }
+
+        effectFn.deps.length = 0;
+    }
+
+    const obj = new Proxy(data, {
+        get(target, key) {
+            if (!activeEffect) return target[key];
+
+            track(target, key);
+
+            return target[key];
+        },
+
+        set(target, key, newValue) {
+            target[key] = newValue;
+
+            trigger(target, key)
+
+            return true;
+        }
+    })
+
+    function track(target, key) {
+        console.log('track', target, key)
+        let depsMap = bucket.get(target);
+        if (!depsMap) {
+            bucket.set(target, (depsMap = new Map()));
+        }
+
+        let deps = depsMap.get(key);
+        if (!deps) {
+            depsMap.set(key, (deps = new Set()));
+        }
+
+        deps.add(activeEffect);
+
+        activeEffect.deps.push(deps);
+    }
+
+    function trigger(target, key) {
+        console.log('trigger ', target, key)
+        const depsMap = bucket.get(target);
+        if (!depsMap) return;
+        const effects = depsMap.get(key);
+
+        const effectsToRun = new Set();
+        effects && effects.forEach(effectFn => {
+            // 如果 trigger 触发执行的副作用函数与当前正在执行的副作用函数相同，则不触发执行
+            if (effectFn !== activeEffect) {
+                effectsToRun.add(effectFn);
+            }
+        });
+        effectsToRun.forEach(fn => console.log('fn.name', fn.name))
+        effectsToRun.forEach(effectFn =>  {
+            // 如果有调度选项，优先使用调度
+            if (effectFn.options.scheduler) {
+                effectFn.options.scheduler(effectFn)
+            } else {
+                effectFn()
+            }
+        });
+    }
+
+    // 使用 Set 用来去重，相同的副作用函数加进去最终只会保留一个
+    const jobQueue = new Set()
+    const p = Promise.resolve()
+
+    let isFlushing = false
+    function flushJob() {
+        if (isFlushing) return
+        isFlushing = true
+        p.then(() => {
+            // 使用 promise 的目的是最后执行
+            jobQueue.forEach(job => job())
+        }).finally(() => {
+            isFlushing = false
+        })
+    }
+
+    effect(
+        () => {
+            console.log(obj.foo)
+        },
+        {
+            scheduler(fn) {
+                jobQueue.add(fn)
+                flushJob()
+            }
+        }
+    )
+
+    obj.foo++
+    obj.foo++
+    obj.foo++
+
+    // 最重只在 obj.foo === 4 的时候执行副作用函数
+</script>
+
+</html>
