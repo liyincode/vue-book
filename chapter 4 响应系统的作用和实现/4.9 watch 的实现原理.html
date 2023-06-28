@@ -129,8 +129,14 @@
     }
 
     function watch(source, cb) {
+        let getter
+        if (typeof source === 'function') {
+            getter = source
+        } else {
+            getter = () => traverse(source)
+        }
         effect(
-            () => traverse(source),
+            getter,
             {
                 scheduler() {
                     cb()
@@ -153,7 +159,9 @@
         return value
     }
 
-    watch(obj, () => {
+    watch(
+        () => obj.foo,
+        () => {
         console.log(11111)
     })
 
