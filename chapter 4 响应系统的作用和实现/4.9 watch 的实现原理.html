@@ -135,14 +135,27 @@
         } else {
             getter = () => traverse(source)
         }
-        effect(
+
+        // 定义旧指和新值
+        let oldValue, newValue
+
+        // 先不立即执行副作用函数
+        const effectFn = effect(
             getter,
             {
+                lazy: true,
                 scheduler() {
-                    cb()
+                    // rigger 触发后，执行的副作用函数的返回值为新值
+                    newValue = effectFn()
+                    cb(newValue, oldValue)
+                    // 将旧值更新
+                    oldValue = newValue
                 }
             }
         )
+
+        // 先手动执行的副作用函数的值为旧值
+        oldValue = effectFn()
     }
 
     function traverse(value, seen = new Set()) {
@@ -161,8 +174,8 @@
 
     watch(
         () => obj.foo,
-        () => {
-        console.log(11111)
+        (newValue, oldValue) => {
+        console.log(newValue, oldValue)
     })
 
     obj.foo++
