@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>4.7 计算属性 computed 与 lazy</title>
+    <title>4.8 计算属性 computed 与 lazy</title>
 </head>
 <body>
 </body>
@@ -66,6 +66,7 @@
 
     function track(target, key) {
         console.log('track', target, key)
+        if (!activeEffect) return
         let depsMap = bucket.get(target);
         if (!depsMap) {
             bucket.set(target, (depsMap = new Map()));
@@ -116,6 +117,7 @@
                 scheduler() {
                     // 使用调度器，当依赖值变化后，将 dirty = true，就可以重新计算了
                     dirty = true
+                    trigger(obj, 'value')
                 }
             }
         )
@@ -125,6 +127,7 @@
                     value = effectFn()
                     dirty = false
                 }
+                track(obj, 'value')
                 return value
             }
         }
@@ -132,19 +135,13 @@
         return obj
     }
 
-    const effectFn = effect(
-        () => {
-            console.log(obj.foo + obj.bar)
-        },
-        {
-            lazy: true
-        }
-    )
+
     const sum = computed(() => obj.foo + obj.bar)
     console.log(sum.value)
+    effect(() => {
+        console.log('afdafa', sum.value)
+    })
     obj.foo++
-    // console.log(sum.value) 结果还是 3，是因为第一次计算完之后，dirty = false，虽然 obj.foo++ 了，但还是用了缓存结果
-    console.log(sum.value)
 </script>
 
 </html>
