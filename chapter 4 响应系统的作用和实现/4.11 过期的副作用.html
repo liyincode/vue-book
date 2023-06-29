@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>4.11 过期的副作用</title>
+</head>
+<body>
+</body>
+
+<script>
+    const data = {foo: 1, bar: 2};
+
+    const bucket = new WeakMap();
+
+    let activeEffect;
+    const effectStack = [];
+
+    function effect(fn, options = {}) {
+        const effectFn = () => {
+            cleanup(effectFn);
+            effectStack.push(effectFn);
+            activeEffect = effectFn;
+            const res = fn();
+            effectStack.pop();
+            activeEffect = effectStack[effectStack.length - 1]
+            return res
+        }
+
+        effectFn.options = options
+        effectFn.deps = [];
+        if (!options.lazy) {
+            effectFn();
+        }
+        return effectFn
+    }
+
+    function cleanup(effectFn) {
+        for (let i = 0; i < effectFn.deps.length; i++) {
+            const deps = effectFn.deps[i];
+            deps.delete(effectFn);
+        }
+
+        effectFn.deps.length = 0;
+    }
+
+    const obj = new Proxy(data, {
+        get(target, key) {
+            if (!activeEffect) return target[key];
+
+            track(target, key);
+
+            return target[key];
+        },
+
+        set(target, key, newValue) {
+            target[key] = newValue;
+
+            trigger(target, key)
+
+            return true;
+        }
+    })
+
+    function track(target, key) {
+        console.log('track', target, key)
+        if (!activeEffect) return
+        let depsMap = bucket.get(target);
+        if (!depsMap) {
+            bucket.set(target, (depsMap = new Map()));
+        }
+
+        let deps = depsMap.get(key);
+        if (!deps) {
+            depsMap.set(key, (deps = new Set()));
+        }
+
+        deps.add(activeEffect);
+
+        activeEffect.deps.push(deps);
+    }
+
+    function trigger(target, key) {
+        console.log('trigger ', target, key)
+        const depsMap = bucket.get(target);
+        if (!depsMap) return;
+        const effects = depsMap.get(key);
+
+        const effectsToRun = new Set();
+        effects && effects.forEach(effectFn => {
+            if (effectFn !== activeEffect) {
+                effectsToRun.add(effectFn);
+            }
+        });
+        // effectsToRun.forEach(fn => console.log('fn.name', fn.name))
+        effectsToRun.forEach(effectFn => {
+            if (effectFn.options.scheduler) {
+                effectFn.options.scheduler(effectFn)
+            } else {
+                effectFn()
+            }
+        });
+    }
+
+    function computed(getter) {
+        let value
+        let dirty = true
+        const effectFn = effect(getter,
+            {
+                lazy: true,
+                scheduler() {
+                    dirty = true
+                    trigger(obj, 'value')
+                }
+            }
+        )
+        const obj = {
+            get value() {
+                if (dirty) {
+                    value = effectFn()
+                    dirty = false
+                }
+                track(obj, 'value')
+                return value
+            }
+        }
+
+        return obj
+    }
+
+    function watch(source, cb, options = {}) {
+        let getter
+        if (typeof source === 'function') {
+            getter = source
+        } else {
+            getter = () => traverse(source)
+        }
+
+        let oldValue, newValue
+
+        let cleanup
+
+        function onInvalidate(fn) {
+            cleanup = fn
+            console.log(fn)
+        }
+
+        const job = () => {
+            newValue = effectFn()
+            if (cleanup) {
+                console.log('cleanup')
+                // 每次执行回调函数 cb 前，都会检查是否存在过期回调，然后把上一次回调函数 cb 的过期回调执行一次
+                cleanup()
+            }
+            cb(newValue, oldValue, onInvalidate)
+            oldValue = newValue
+        }
+
+        // 先不立即执行副作用函数
+        const effectFn = effect(
+            getter,
+            {
+                lazy: true,
+                scheduler: () => {
+                    if (options.flush === 'post') {
+                        // 放入微任务队列中，等待 dom 更新完执行
+                        const p = Promise.resolve()
+                        p.then(job)
+                    } else {
+                        job()
+                    }
+                }
+            }
+        )
+
+        // 立即执行，触发回调
+        if (options.immediate) {
+            job()
+        } else {
+            oldValue = effectFn()
+        }
+    }
+
+    function traverse(value, seen = new Set()) {
+        if (typeof value !== 'object' || value === null || seen.has(value)) return
+
+        seen.add(value)
+        for (const k in value) {
+            traverse(value[k], seen)
+        }
+
+        return value
+    }
+
+    let count = 0
+
+    function fetch() {
+        // 第二次请求的持续时间是 100，第一次是 1000
+        count++
+        const res = count === 1 ? 'A' : 'B'
+        return new Promise(resolve => {
+            setTimeout(() => {
+                resolve(res)
+            }, count === 1 ? 1000 : 100);
+        })
+    }
+
+    let finalData
+
+    /*
+    监听 obj.foo 的变化, 每次变化发送一次请求，变化两次后就会发送两次请求
+    但是，不知道这两次请求哪一次后返回，如果 watch 第一次的请求最后返回，那 finalData
+    更新为第一次 watch 发送接口的返回值，这是不合理的。
+    两次 watch 中，第一次 watch 发送的接口其实已经 “过期” 了，最后的值不管怎样都应该是 第二次 watch
+    请求返回的值
+     */
+    watch(
+        () => obj.foo,
+        async (newValue, oldValue, onInvalidate) => {
+            console.log('watch', {newValue, oldValue, onInvalidate})
+            let valid = true
+            onInvalidate(() => {
+                valid = false
+            })
+
+            const res = await fetch()
+
+            if (valid) {
+                finalData = res
+                console.log(finalData)
+            }
+            console.log(newValue, oldValue)
+        },
+        {
+            immediate: true,
+            flush: 'post'
+        }
+    )
+
+
+    obj.foo++
+    setTimeout(() => {
+        obj.foo++
+    }, 200)
+</script>
+
+</html>
